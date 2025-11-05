@@ -1,0 +1,11 @@
+numpy
+pandas 
+matplotlib 
+requests 
+tqdm 
+python-dotenv 
+scikit-learn 
+scipy 
+seaborn 
+pydub
+huggingface_hub
