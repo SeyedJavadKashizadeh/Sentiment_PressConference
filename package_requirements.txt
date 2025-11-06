@@ -9,3 +9,5 @@ scipy
 seaborn 
 pydub
 huggingface_hub
+librosa==0.11.0
+opensmile==2.6.0
