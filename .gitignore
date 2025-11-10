@@ -212,3 +212,7 @@ __marimo__/
 
 # macOS system files
 .DS_Store
+
+# training datasets
+dataset_training/*
+!dataset_trainings/.gitkeep
