@@ -5,6 +5,8 @@ requests
 tqdm 
 python-dotenv 
 scikit-learn 
+tensorflow==2.15.*  
+tf-keras
 scipy 
 seaborn 
 pydub
