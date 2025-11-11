@@ -97,16 +97,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Dict, Any, Callable, Optional
-import os
+from typing import Iterable, List, Any, Optional
 
 #########
 # Enums #
 #########
 
-EMOTION = {
+EMOTION_ID_TO_NAME = {
     1: "neutral", # neutral
-    2: "calm", # neutral
+    2: "calm", # calm = neutral
     3: "happy", # happy
     4: "sad", #sad
     5: "angry", #angry
@@ -148,7 +147,7 @@ class RavdessId:
 
     @property
     def emotion_name(self) -> str:
-        return EMOTION.get(self.emotion, f"unknown({self.emotion})")
+        return EMOTION_ID_TO_NAME.get(self.emotion, f"unknown({self.emotion})")
 
     @property
     def modality_name(self) -> str:

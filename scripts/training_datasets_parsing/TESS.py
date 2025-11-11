@@ -82,7 +82,7 @@ import re
 # Enums #
 #########
 
-EMOTION: Dict[int, str] = {
+EMOTION_ID_TO_NAME: Dict[int, str] = {
     1: "neutral",
     2: "calm",
     3: "happy",
@@ -107,7 +107,7 @@ NAME_NORMALIZE = {
     "pleasantsurprise": "pleasant_surprise",
 }
 
-EMOTION_NAME_TO_ID = {v: k for k, v in EMOTION.items()}
+EMOTION_NAME_TO_ID = {v: k for k, v in EMOTION_ID_TO_NAME.items()}
 
 ##############################
 # String normalization utils #
@@ -133,7 +133,7 @@ class TessId:
 
     @property
     def emotion_name(self) -> str:
-        return EMOTION[self.emotion]
+        return EMOTION_ID_TO_NAME[self.emotion]
 
     @classmethod
     def from_dirname(cls, dirname: str) -> "TessId":
