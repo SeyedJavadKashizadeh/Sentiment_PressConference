@@ -1,11 +1,36 @@
 import numpy as np
 import soundfile as sf
+import os, subprocess
+import pandas as pd
+from tqdm import tqdm
 
 import librosa
 import opensmile
 from huggingface_hub import HfFileSystem, list_repo_files, hf_hub_download
 
 REPO_ID = "FedSentimentLab/Fed_audio_text_video"
+
+def convert_to_mono_16khz(local_paths, target_dir="converted_16khz"):
+    os.makedirs(target_dir, exist_ok=True)
+    converted = {}
+
+    for rel_path, abs_path in local_paths.items():
+        # Keep subfolder structure
+        filename = os.path.basename(abs_path)
+        target_path = os.path.join(target_dir, rel_path)
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+
+        # Only convert if not already done
+        if not os.path.exists(target_path):
+            command = f"ffmpeg -y -i '{abs_path}' -ac 1 -ar 16000 '{target_path}'"
+            subprocess.call(command, shell=True)
+            print(f"Converted {abs_path} → {target_path}")
+        else:
+            print(f"Already exists: {target_path}")
+
+        converted[rel_path] = target_path
+
+    return converted
 
 def extract_features_librosa(file_name: str) -> np.ndarray:
     """
@@ -97,7 +122,7 @@ def extract_features_opensmile(file_name: str) -> np.ndarray:
 )
 
     features = smile.process_file(file_name)
-    features = features.to_numpy()
+    #features = features.to_numpy()
 
     return features
 
@@ -139,8 +164,6 @@ def get_audio_files_by_folder() -> dict:
         audio_files_per_folder[folder_name] = audio_files
 
     return audio_files_per_folder
-
-from huggingface_hub import hf_hub_download
 
 def download_audio_files_hf(hf_token: str, files_by_folder: dict, download_one: bool) -> dict:
     """
@@ -199,3 +222,84 @@ def download_audio_files_hf(hf_token: str, files_by_folder: dict, download_one: 
                     print(f"Failed to download {file}: {e}")
 
     return local_paths
+
+def build_feature_dataframe(converted_paths: dict) -> pd.DataFrame:
+    """
+    Builds a MultiIndex DataFrame of extracted features.
+    
+    Parameters
+    ----------
+    converted_paths : dict
+        Mapping {relative_path: absolute_path} from convert_to_mono_16khz().
+        
+    Returns
+    -------
+    pd.DataFrame
+        MultiIndex DataFrame with:
+            - Level 0: folder name (e.g. '20110427')
+            - Level 1: file name (e.g. 'CHAIRMAN_BERNANKE_s1.wav')
+            - Columns: extracted audio features
+    """
+    records = []
+    index_tuples = []
+
+    for rel_path, abs_path in tqdm(converted_paths.items(), desc="Extracting features"):
+        folder = rel_path.split("/")[1]  # 'audio_files_split/<folder>/<file>.wav'
+        filename = os.path.basename(abs_path)
+
+        try:
+            features = extract_features_librosa(abs_path)
+            records.append(features.flatten())
+            index_tuples.append((folder, filename))
+        except Exception as e:
+            print(f"Skipped {filename}: {e}")
+
+    # Build MultiIndex DataFrame
+    feature_array = np.vstack(records)
+    df = pd.DataFrame(feature_array)
+
+    # Create feature column names (based on extract_features_librosa definition)
+    mfcc_cols = [f"mfcc_{i}" for i in range(40)]
+    chroma_cols = [f"chroma_{i}" for i in range(12)]
+    mel_cols = [f"mel_{i}" for i in range(128)]
+    contrast_cols = [f"contrast_{i}" for i in range(7)]
+    tonnetz_cols = [f"tonnetz_{i}" for i in range(6)]
+    df.columns = mfcc_cols + chroma_cols + mel_cols + contrast_cols + tonnetz_cols
+
+    # MultiIndex with folder and filename
+    df.index = pd.MultiIndex.from_tuples(index_tuples, names=["folder", "filename"])
+
+    return df
+
+def build_features_df_opensmile(converted_paths: dict) -> pd.DataFrame:
+    """
+    Extract OpenSMILE features for all audio files and build a single DataFrame
+    with MultiIndex (folder, filename)
+    """
+    import opensmile
+
+    feature_rows = []
+    index_tuples = []
+
+    smile = opensmile.Smile(
+        feature_set=opensmile.FeatureSet.eGeMAPSv02,
+        feature_level=opensmile.FeatureLevel.Functionals
+    )
+
+    for rel_path, abs_path in converted_paths.items():
+        folder = rel_path.split("/")[1]  # e.g., '20110427'
+        filename = os.path.basename(abs_path)
+
+        try:
+            features_df = smile.process_file(abs_path)  # returns pd.DataFrame
+            # convert to single row if not already
+            features_row = features_df.iloc[0] if len(features_df) == 1 else features_df.mean(axis=0)
+            feature_rows.append(features_row)
+            index_tuples.append((folder, filename))
+        except Exception as e:
+            print(f"Skipped {filename}: {e}")
+
+    # Combine into a single DataFrame
+    combined_df = pd.DataFrame(feature_rows)
+    combined_df.index = pd.MultiIndex.from_tuples(index_tuples, names=["folder", "filename"])
+    return combined_df
