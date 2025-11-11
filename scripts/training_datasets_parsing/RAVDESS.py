@@ -1,153 +1,172 @@
 """
-MAIN IDEA
----------
-A strongly typed parser and filtering engine for the RAVDESS emotional
-speech/audio-visual dataset. It extracts all metadata directly from the
-RAVDESS filename stem (e.g., "03-01-06-01-02-01-12") and represents each
-audio file as a structured object (`RavdessId`, `RavdessFile`) to enable
-clean, reliable machine-learning workflows without relying on directory names.
+scripts/training_datasets_parsing/RAVDESS.py
+=================================================
+RAVDESS filename parser and flexible filter utilities.
 
-MAIN DATA MODELS
-----------------
-- RavdessId:
-    - Stores all 7 components parsed from the filename:
-        modality, vocal_channel, emotion, intensity,
-        statement, repetition, actor
-    - Convenience properties:
-        gender, emotion_name, modality_name, vocal_channel_name,
-        intensity_name, statement_text
-    - Factory: RavdessId.from_stem("MM-VC-EM-IN-ST-RP-AC")
-    - Serializer: ravdess_id.to_stem() → "MM-VC-EM-IN-ST-RP-AC"
+This module provides strongly typed data models for the RAVDESS dataset and a
+small engine to scan a directory tree, parse filenames into structured
+metadata, and select files via expressive criteria (including human-friendly
+emotion names).
 
-- RavdessFile:
-    - Couples a filesystem Path with its parsed RavdessId
-    - Factory: RavdessFile.from_path(path)
-    - Filtering via .matches(**criteria)
-      Supported keys include:
-        gender="male"
-        emotion=6
-        emotion_in={3, 6, 8}
-        vocal_channel=1
-        intensity_in={1, 2}
-        actor_in={1, 3, 5, 7}
-      Keys correspond to RavdessId attributes or derived properties.
+Overview
+--------
+- Metadata is extracted **only** from the filename stem
+  (e.g. "03-01-06-01-02-01-12").
+- Parsed fields are validated (ranges, neutral intensity rule) and exposed via
+  immutable dataclasses: `RavdessId` and `RavdessFile`.
+- Emotion filters accept either integers or names; all are normalized to a
+  universal id space through `normalize_ravdess_emotion[_set]`.
 
-FILTERING
----------
-- Implemented by RavdessFile.matches(**criteria)
-- Supports:
-    - Exact matches (emotion=3, modality=1)
-    - Set membership using *_in (emotion_in={3,5}, actor_in={2,4})
-    - Derived attributes such as gender="female"
-- Unknown filter keys raise ValueError
-- Designed to mirror ML experiment requirements (subset by emotion, speaker,
-  intensity, etc.)
+Key data models
+---------------
+RavdessId
+    Structured view of "MM-VC-EM-IN-ST-RP-AC".
+    Fields (ints): modality(1..3), vocal_channel(1..2), emotion_code(1..8),
+    intensity(1..2), statement(1..2), repetition(1..2), actor(1..24).
+    Derived:
+        • gender: "male" if actor is odd, else "female".
+        • emotion_name, modality_name, vocal_channel_name, intensity_name,
+          statement_text via the dictionaries imported from `utils`.
 
-SCANNING & SELECTION
---------------------
-- scan_ravdess(root, pattern="*.wav"):
-    Recursively walks the dataset, converts each valid RAVDESS filename into a
-    RavdessFile. Skips malformed files. Avoids descending into the official
-    "audio_speech_actors_01-24" root folder.
+    Construction:
+        `RavdessId.from_stem("03-01-06-01-02-01-12")`
 
-- select(files, **criteria):
-    Applies .matches() to a list of RavdessFile objects.
+    Serialization:
+        `eid.to_stem()  -> "03-01-06-01-02-01-12"`
 
-EXAMPLE USAGE
+    Validation rules:
+        • All numeric parts must be in their documented ranges.
+        • Neutral (emotion_code==1) **cannot** have strong intensity (2).
+
+RavdessFile
+    Couples a `path: Path` with its parsed `eid: RavdessId`.
+    Use `RavdessFile.from_path(path)` to construct.
+    `.matches(**criteria)` applies flexible filtering (see below).
+
+Filtering API
 -------------
-root = Path("/path/to/RAVDESS")
-female_happy = main(root, gender="female", emotion=3)
+`RavdessFile.matches(**criteria)` supports:
 
-# More advanced selection:
-subset = select(all_files,
-                gender="male",
-                emotion_in={3, 5},
-                intensity=1)
+Exact match
+    modality=3, vocal_channel=1, intensity=2, statement=1, repetition=2,
+    actor=17, emotion=3 (int) or emotion="sad" (name).
 
-NOTES & GUARANTEES
-------------------
-- Parsing is done exclusively from the filename stem; directory layout does not
-  matter. Files can be moved arbitrarily.
-- All validation is performed inside RavdessId.from_stem to prevent malformed
-  files from entering the dataset.
-- Dataclasses are frozen for immutability and safe hashing.
-- Filtering logic is expressive and covers most ML use cases.
+Set membership
+    modality_in={1,3}, actor_in=[1,3,5], repetition_in={1,2},
+    emotion_in=[1, "happy", "fear"]  # ints and names mixed.
 
-OUTPUT LIST EXAMPLE
+Derived attribute
+    gender="male" or "female".
+
+Invalid filter keys raise `ValueError`. For emotions, names/ints are normalized
+via `normalize_ravdess_emotion[_set]` before comparison.
+
+Scanning & selection
 --------------------
-RavdessFile(
-    path=.../Actor_24/03-01-03-02-02-02-24.wav,
-    rid=RavdessId(
-        modality=3,
-        vocal_channel=1,
-        emotion=3,
-        intensity=2,
-        statement=2,
-        repetition=2,
-        actor=24
-    )
-)
+scan_ravdess(root: Path, pattern: str = "*.wav") -> list[RavdessFile]
+    Recursively discovers WAV files under `root`, skipping the official folder
+    "audio_speech_actors_01-24" if present. Non-conforming filenames are
+    ignored.
 
-This corresponds to: audio-only (3), speech (1), emotion "happy" (3),
-strong intensity (2), statement 2, repetition 2, spoken by actor 24 (female).
+select(files: Iterable[RavdessFile], **criteria) -> list[RavdessFile]
+    Returns files satisfying `.matches(**criteria)`.
+
+main(...)
+    Convenience wrapper that scans then filters. Supports all criteria listed
+    above, including mixed-type emotion filters. Prints a short summary and
+    returns the selected files.
+
+Parameters (main)
+-----------------
+root : Path
+    Root directory to scan.
+gender : {"male","female"}, optional
+modality, vocal_channel, intensity, statement, repetition, actor : int, optional
+*_in : Iterable[int], optional
+    Set-membership versions of the above (e.g., modality_in, actor_in, ...).
+emotion : int | str, optional
+    Either a universal id (1..8 for RAVDESS) or a name like "happy", "sad".
+emotion_in : Iterable[int | str], optional
+    Mixed list of ids/names.
+
+Returns
+-------
+list[RavdessFile]
+    The files whose parsed metadata match the provided criteria.
+
+Examples
+--------
+>>> root = Path("/data/RAVDESS")
+>>> # All female SAD utterances (emotion by name)
+>>> subset = main(root, gender="female", emotion="sad")
+>>> # Mixed integer–string emotion filter
+>>> subset = main(root, emotion_in=[1, "happy", "fear"])
+>>> # Audio-only male speech with strong intensity
+>>> subset = main(root, gender="male", modality=3, vocal_channel=1, intensity=2)
+
+Notes
+-----
+- Mappings (EMOTION_ID_TO_NAME, MODALITY, VOCAL_CHANNEL, EMOTION_INTENSITY,
+  STATEMENT) and normalizers are imported from `utils`.
+- Dataclasses are `frozen=True` for immutability and hash safety.
+- Directory layout is irrelevant; only filename stems are used.
 """
-
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Any, Optional
+from typing import Iterable, List, Dict, Any, Optional, Union
 
-#########
-# Enums #
-#########
-
-EMOTION_ID_TO_NAME = {
-    1: "neutral", # neutral
-    2: "calm", # calm = neutral
-    3: "happy", # happy
-    4: "sad", #sad
-    5: "angry", #angry
-    6: "fearful", #fear
-    7: "disgust", # disgust
-    8: "surprised", #pleasant surprise
-}
-
-STATEMENT = {
-    1: "Kids are talking by the door",
-    2: "Dogs are sitting by the door",
-}
-
-MODALITY = {1: "full-AV", 2: "video-only", 3: "audio-only"}
-
-VOCAL_CHANNEL = {1: "speech", 2: "song"}
-
-EMOTION_INTENSITY = {1: "normal", 2: "strong"}
-
-
-###############
-# Dataclasses #
-###############
+try:
+    from utils import (
+        UNIVERSAL_EMOTION_ID_TO_NAME as EMOTION_ID_TO_NAME,   
+        RAVDESS_STATEMENT as STATEMENT,                      
+        RAVDESS_MODALITY as MODALITY,                         
+        RAVDESS_VOCAL_CHANNEL as VOCAL_CHANNEL,               
+        RAVDESS_EMOTION_INTENSITY as EMOTION_INTENSITY,       
+        normalize_ravdess_emotion,                            
+        normalize_ravdess_emotion_set,                        
+    )
+except ImportError:
+    from scripts.training_datasets_parsing.utils import (
+        UNIVERSAL_EMOTION_ID_TO_NAME as EMOTION_ID_TO_NAME,   
+        RAVDESS_STATEMENT as STATEMENT,                       
+        RAVDESS_MODALITY as MODALITY,                         
+        RAVDESS_VOCAL_CHANNEL as VOCAL_CHANNEL,               
+        RAVDESS_EMOTION_INTENSITY as EMOTION_INTENSITY,       
+        normalize_ravdess_emotion,                            
+        normalize_ravdess_emotion_set,                        
+    )
+###############################################################################
+# Data models
+###############################################################################
 
 @dataclass(frozen=True)
 class RavdessId:
+    """
+    Parsed RAVDESS identifier from a filename stem 'MM-VC-EM-IN-ST-RP-AC'.
+
+    Fields store canonical integer codes as per the official RAVDESS spec.
+    Emotion is kept as a *universal* emotion id (1..8) for cross-dataset
+    consistency (via normalize_ravdess_emotion).
+    """
     modality: int         # 01..03
     vocal_channel: int    # 01..02
-    emotion: int          # 01..08
-    intensity: int        # 01..02 (no '02' for emotion==1)
+    emotion_id: int     # universal id after normalization/collapse
+    intensity: int        # 01..02  (no '02' when emotion==1 "neutral")
     statement: int        # 01..02
     repetition: int       # 01..02
     actor: int            # 01..24
 
     @property
     def gender(self) -> str:
-        # Odd actor IDs are male, even are female
+        # Odd actors are male; even actors are female in RAVDESS
         return "male" if self.actor % 2 == 1 else "female"
 
     @property
     def emotion_name(self) -> str:
-        return EMOTION_ID_TO_NAME.get(self.emotion, f"unknown({self.emotion})")
+        return EMOTION_ID_TO_NAME.get(self.emotion_id, f"unknown({self.emotion_id})")
 
     @property
     def modality_name(self) -> str:
@@ -159,7 +178,6 @@ class RavdessId:
 
     @property
     def intensity_name(self) -> str:
-        # Neutral (1) has no strong intensity in the dataset
         return EMOTION_INTENSITY.get(self.intensity, f"unknown({self.intensity})")
 
     @property
@@ -169,80 +187,117 @@ class RavdessId:
     @classmethod
     def from_stem(cls, stem: str) -> "RavdessId":
         """
-        Parse '03-01-06-01-02-01-12' into fields.
+        Parse '03-01-06-01-02-01-12' into fields and validate ranges.
+        Emotion is normalized to the universal id space (1..8 for RAVDESS).
         """
         parts = stem.split("-")
         if len(parts) != 7 or not all(p.isdigit() for p in parts):
             raise ValueError(f"Invalid RAVDESS stem: {stem}")
-        m, vc, emo, inten, stmt, rep, act = (int(p) for p in parts)
-        # Basic validations
-        if not (1 <= m <= 3): raise ValueError(f"modality out of range in {stem}")
-        if not (1 <= vc <= 2): raise ValueError(f"vocal_channel out of range in {stem}")
-        if not (1 <= emo <= 8): raise ValueError(f"emotion out of range in {stem}")
-        if not (1 <= inten <= 2): raise ValueError(f"intensity out of range in {stem}")
-        if emo == 1 and inten != 1:  # neutral has no strong
-            raise ValueError(f"neutral emotion cannot have strong intensity in {stem}")
-        if not (1 <= stmt <= 2): raise ValueError(f"statement out of range in {stem}")
-        if not (1 <= rep <= 2): raise ValueError(f"repetition out of range in {stem}")
-        if not (1 <= act <= 24): raise ValueError(f"actor out of range in {stem}")
+
+        m, vc, emo_raw, inten, stmt, rep, act = (int(p) for p in parts)
+
+        # Validate fixed ranges
+        if not (1 <= m <= 3):      raise ValueError(f"modality out of range in {stem}")
+        if not (1 <= vc <= 2):     raise ValueError(f"vocal_channel out of range in {stem}")
+        if not (1 <= inten <= 2):  raise ValueError(f"intensity out of range in {stem}")
+        if not (1 <= stmt <= 2):   raise ValueError(f"statement out of range in {stem}")
+        if not (1 <= rep <= 2):    raise ValueError(f"repetition out of range in {stem}")
+        if not (1 <= act <= 24):   raise ValueError(f"actor out of range in {stem}")
+
+        # RAVDESS uses 1..8 for emotions; normalize through the universal mapper
+        emo = normalize_ravdess_emotion(emo_raw)
+
+        # Neutral has no 'strong' intensity
+        if emo_raw == 1 and inten != 1:
+             raise ValueError(f"neutral emotion cannot have strong intensity in {stem}")
+        
         return cls(m, vc, emo, inten, stmt, rep, act)
 
     def to_stem(self) -> str:
-        return f"{self.modality:02d}-{self.vocal_channel:02d}-{self.emotion:02d}-{self.intensity:02d}-{self.statement:02d}-{self.repetition:02d}-{self.actor:02d}"
+        # Serialize back to the standard filename stem (using universal emotion id)
+        return (
+            f"{self.modality:02d}-{self.vocal_channel:02d}-{self.emotion_id:02d}-"
+            f"{self.intensity:02d}-{self.statement:02d}-{self.repetition:02d}-{self.actor:02d}"
+        )
+
 
 @dataclass(frozen=True)
 class RavdessFile:
     """
-    Container that ties a parsed RAVDESS id to an actual file path.
+    Couple a filesystem Path with its parsed RavdessId.
     """
     path: Path
-    rid: RavdessId
+    eid: RavdessId
 
     @classmethod
     def from_path(cls, path: Path) -> "RavdessFile":
-        rid = RavdessId.from_stem(path.stem)
-        return cls(path=path, rid=rid)
+        return cls(path=path, eid=RavdessId.from_stem(path.stem))
 
     def matches(self, **criteria: Any) -> bool:
         """
-        Flexible filtering:
-        - gender="male" / "female"
-        - emotion=6 or emotion_in={3,6}
-        - vocal_channel=1 (speech) / 2 (song)
-        - modality=3 (audio-only)
-        - intensity=1 or intensity_in={1,2}
-        - actor_in={1,3,5}
-        etc.
+        Flexible filtering with emotion normalization:
+          - gender="male"/"female"
+          - modality / modality_in
+          - vocal_channel / vocal_channel_in
+          - emotion or emotion_code (int or name); emotion_in can mix ints/strings
+          - intensity / intensity_in
+          - statement / statement_in
+          - repetition / repetition_in
+          - actor / actor_in
         """
         for key, value in criteria.items():
+
+            # Derived attribute
             if key == "gender":
-                if self.rid.gender != value:
+                if self.eid.gender != value:
                     return False
-            elif key.endswith("_in"):
+                continue
+
+            # Emotion (accepts int or string label/alias)
+            if key in {"emotion", "emotion_code"}:
+                want = normalize_ravdess_emotion(value)
+                if self.eid.emotion_id != want:
+                    return False
+                continue
+
+            if key in {"emotion_in", "emotion_code_in"}:
+                allowed = normalize_ravdess_emotion_set(value)
+                if self.eid.emotion_id not in allowed:
+                    return False
+                continue
+
+            # Generic *_in for the remaining integer fields
+            if key.endswith("_in"):
                 field = key[:-3]
-                attr = getattr(self.rid, field)
-                if attr not in value:
-                    return False
-            else:
-                # exact field match against RavdessId attributes
-                if not hasattr(self.rid, key):
+                if field == "emotion":   # alias to stored attribute name
+                    field = "emotion_code"
+                if not hasattr(self.eid, field):
                     raise ValueError(f"Unknown filter key: {key}")
-                if getattr(self.rid, key) != value:
+                if getattr(self.eid, field) not in value:
                     return False
+                continue
+
+            # Exact match (with emotion alias handled above)
+            field = "emotion_code" if key == "emotion" else key
+            if not hasattr(self.eid, field):
+                raise ValueError(f"Unknown filter key: {key}")
+            if getattr(self.eid, field) != value:
+                return False
+
         return True
 
-
-#############
-# Utilities #
-#############
-
+###############################################################################
+# Scanning & selection
+###############################################################################
 
 def scan_ravdess(root: Path, pattern: str = "*.wav") -> List[RavdessFile]:
+    """
+    Recursively collect WAV files under `root`, skipping the official
+    'audio_speech_actors_01-24' folder if present, and parse them.
+    """
     files: List[RavdessFile] = []
     skip = "audio_speech_actors_01-24"
-
     for p in root.rglob(pattern):
-        # Skip any file inside the skip folder at any depth
         if skip in p.parts:
             continue
         if not p.is_file():
@@ -250,14 +305,18 @@ def scan_ravdess(root: Path, pattern: str = "*.wav") -> List[RavdessFile]:
         try:
             files.append(RavdessFile.from_path(p))
         except Exception:
+            # Skip files that don't conform to the naming scheme
             continue
     return files
 
+
 def select(files: Iterable[RavdessFile], **criteria: Any) -> List[RavdessFile]:
-    """
-    Filter a collection of RavdessFile by attribute criteria (see RavdessFile.matches).
-    """
+    """Filter a collection of RavdessFile by attribute criteria."""
     return [f for f in files if f.matches(**criteria)]
+
+###############################################################################
+# Main
+###############################################################################
 
 def main(
     root: Path,
@@ -266,8 +325,8 @@ def main(
     modality_in: Optional[Iterable[int]] = None,
     vocal_channel: Optional[int] = None,
     vocal_channel_in: Optional[Iterable[int]] = None,
-    emotion: Optional[int] = None,
-    emotion_in: Optional[Iterable[int]] = None,
+    emotion: Optional[Union[int, str]] = None,
+    emotion_in: Optional[Iterable[Union[int, str]]] = None,
     intensity: Optional[int] = None,
     intensity_in: Optional[Iterable[int]] = None,
     statement: Optional[int] = None,
@@ -277,63 +336,49 @@ def main(
     actor: Optional[int] = None,
     actor_in: Optional[Iterable[int]] = None,
 ) -> List[RavdessFile]:
-
-    # Scan dataset
+    """
+    Scan RAVDESS under `root` and return files matching the given criteria.
+    Accepts mixed emotion filters (ints or strings).
+    """
     all_files = scan_ravdess(root)
     print(f"Total parsed files: {len(all_files)}")
 
-    # Build criteria dictionary dynamically
-    criteria: dict[str, Any] = {}
+    criteria: Dict[str, Any] = {}
 
-    if gender is not None:
-        criteria["gender"] = gender
+    if gender is not None: criteria["gender"] = gender
 
-    if modality is not None:
-        criteria["modality"] = modality
-    if modality_in is not None:
-        criteria["modality_in"] = set(modality_in)
+    if modality is not None: criteria["modality"] = modality
+    if modality_in is not None: criteria["modality_in"] = set(modality_in)
 
-    if vocal_channel is not None:
-        criteria["vocal_channel"] = vocal_channel
-    if vocal_channel_in is not None:
-        criteria["vocal_channel_in"] = set(vocal_channel_in)
+    if vocal_channel is not None: criteria["vocal_channel"] = vocal_channel
+    if vocal_channel_in is not None: criteria["vocal_channel_in"] = set(vocal_channel_in)
 
-    if emotion is not None:
-        criteria["emotion"] = emotion
-    if emotion_in is not None:
-        criteria["emotion_in"] = set(emotion_in)
+    # Emotion: pass raw; normalization happens inside .matches()
+    if emotion is not None: criteria["emotion"] = emotion
+    if emotion_in is not None: criteria["emotion_in"] = set(emotion_in)
 
-    if intensity is not None:
-        criteria["intensity"] = intensity
-    if intensity_in is not None:
-        criteria["intensity_in"] = set(intensity_in)
+    if intensity is not None: criteria["intensity"] = intensity
+    if intensity_in is not None: criteria["intensity_in"] = set(intensity_in)
 
-    if statement is not None:
-        criteria["statement"] = statement
-    if statement_in is not None:
-        criteria["statement_in"] = set(statement_in)
+    if statement is not None: criteria["statement"] = statement
+    if statement_in is not None: criteria["statement_in"] = set(statement_in)
 
-    if repetition is not None:
-        criteria["repetition"] = repetition
-    if repetition_in is not None:
-        criteria["repetition_in"] = set(repetition_in)
+    if repetition is not None: criteria["repetition"] = repetition
+    if repetition_in is not None: criteria["repetition_in"] = set(repetition_in)
 
-    if actor is not None:
-        criteria["actor"] = actor
-    if actor_in is not None:
-        criteria["actor_in"] = set(actor_in)
+    if actor is not None: criteria["actor"] = actor
+    if actor_in is not None: criteria["actor_in"] = set(actor_in)
 
-    # Apply selection
-    selected_files = select(all_files, **criteria)
+    selected = select(all_files, **criteria)
 
-    print(f"Selected files: {len(selected_files)}")
-    for f in selected_files[:5]:
+    print(f"Selected files: {len(selected)}")
+    for f in selected[:5]:
         print(" -", f.path.name)
 
-    return selected_files
+    return selected
+
 
 if __name__ == "__main__":
-    # Example local test
-    root = Path(__file__).resolve().parents[2]
-    root = root / "dataset_training" / "RAVDESS"
-    female_happy = main(root, gender="female", emotion=3)
+    # Example local test 
+    root = Path(__file__).resolve().parents[2] / "dataset_training" / "RAVDESS"
+    selected = main(root, gender="female", emotion_in=["happy", "fear", 4])
