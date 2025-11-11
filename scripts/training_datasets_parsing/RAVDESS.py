@@ -1,22 +1,118 @@
+"""
+MAIN IDEA
+---------
+A strongly typed parser and filtering engine for the RAVDESS emotional
+speech/audio-visual dataset. It extracts all metadata directly from the
+RAVDESS filename stem (e.g., "03-01-06-01-02-01-12") and represents each
+audio file as a structured object (`RavdessId`, `RavdessFile`) to enable
+clean, reliable machine-learning workflows without relying on directory names.
+
+MAIN DATA MODELS
+----------------
+- RavdessId:
+    - Stores all 7 components parsed from the filename:
+        modality, vocal_channel, emotion, intensity,
+        statement, repetition, actor
+    - Convenience properties:
+        gender, emotion_name, modality_name, vocal_channel_name,
+        intensity_name, statement_text
+    - Factory: RavdessId.from_stem("MM-VC-EM-IN-ST-RP-AC")
+    - Serializer: ravdess_id.to_stem() → "MM-VC-EM-IN-ST-RP-AC"
+
+- RavdessFile:
+    - Couples a filesystem Path with its parsed RavdessId
+    - Factory: RavdessFile.from_path(path)
+    - Filtering via .matches(**criteria)
+      Supported keys include:
+        gender="male"
+        emotion=6
+        emotion_in={3, 6, 8}
+        vocal_channel=1
+        intensity_in={1, 2}
+        actor_in={1, 3, 5, 7}
+      Keys correspond to RavdessId attributes or derived properties.
+
+FILTERING
+---------
+- Implemented by RavdessFile.matches(**criteria)
+- Supports:
+    - Exact matches (emotion=3, modality=1)
+    - Set membership using *_in (emotion_in={3,5}, actor_in={2,4})
+    - Derived attributes such as gender="female"
+- Unknown filter keys raise ValueError
+- Designed to mirror ML experiment requirements (subset by emotion, speaker,
+  intensity, etc.)
+
+SCANNING & SELECTION
+--------------------
+- scan_ravdess(root, pattern="*.wav"):
+    Recursively walks the dataset, converts each valid RAVDESS filename into a
+    RavdessFile. Skips malformed files. Avoids descending into the official
+    "audio_speech_actors_01-24" root folder.
+
+- select(files, **criteria):
+    Applies .matches() to a list of RavdessFile objects.
+
+EXAMPLE USAGE
+-------------
+root = Path("/path/to/RAVDESS")
+female_happy = main(root, gender="female", emotion=3)
+
+# More advanced selection:
+subset = select(all_files,
+                gender="male",
+                emotion_in={3, 5},
+                intensity=1)
+
+NOTES & GUARANTEES
+------------------
+- Parsing is done exclusively from the filename stem; directory layout does not
+  matter. Files can be moved arbitrarily.
+- All validation is performed inside RavdessId.from_stem to prevent malformed
+  files from entering the dataset.
+- Dataclasses are frozen for immutability and safe hashing.
+- Filtering logic is expressive and covers most ML use cases.
+
+OUTPUT LIST EXAMPLE
+--------------------
+RavdessFile(
+    path=.../Actor_24/03-01-03-02-02-02-24.wav,
+    rid=RavdessId(
+        modality=3,
+        vocal_channel=1,
+        emotion=3,
+        intensity=2,
+        statement=2,
+        repetition=2,
+        actor=24
+    )
+)
+
+This corresponds to: audio-only (3), speech (1), emotion "happy" (3),
+strong intensity (2), statement 2, repetition 2, spoken by actor 24 (female).
+"""
+
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Dict, Any, Callable, Optional
 import os
+
 #########
 # Enums #
 #########
 
 EMOTION = {
-    1: "neutral",
-    2: "calm",
-    3: "happy",
-    4: "sad",
-    5: "angry",
-    6: "fearful",
-    7: "disgust",
-    8: "surprised",
+    1: "neutral", # neutral
+    2: "calm", # neutral
+    3: "happy", # happy
+    4: "sad", #sad
+    5: "angry", #angry
+    6: "fearful", #fear
+    7: "disgust", # disgust
+    8: "surprised", #pleasant surprise
 }
 
 STATEMENT = {
@@ -141,25 +237,21 @@ class RavdessFile:
 # Utilities #
 #############
 
+
 def scan_ravdess(root: Path, pattern: str = "*.wav") -> List[RavdessFile]:
     files: List[RavdessFile] = []
     skip = "audio_speech_actors_01-24"
 
-    for folder, subdirs, filenames in os.walk(root):
-        folder_path = Path(folder)
-
-        if folder_path.name == skip:
-            subdirs[:] = []
+    for p in root.rglob(pattern):
+        # Skip any file inside the skip folder at any depth
+        if skip in p.parts:
             continue
-
-        for filename in filenames:
-            if filename.endswith(".wav"):
-                p = folder_path / filename
-                try:
-                    files.append(RavdessFile.from_path(p))
-                except Exception:
-                    continue
-
+        if not p.is_file():
+            continue
+        try:
+            files.append(RavdessFile.from_path(p))
+        except Exception:
+            continue
     return files
 
 def select(files: Iterable[RavdessFile], **criteria: Any) -> List[RavdessFile]:
@@ -240,3 +332,9 @@ def main(
         print(" -", f.path.name)
 
     return selected_files
+
+if __name__ == "__main__":
+    # Example local test
+    root = Path(__file__).resolve().parents[2]
+    root = root / "dataset_training" / "RAVDESS"
+    female_happy = main(root, gender="female", emotion=3)
