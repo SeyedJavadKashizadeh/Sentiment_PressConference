@@ -116,12 +116,12 @@ def train_model(model_path, infile):
     '''
         Training
     '''
-    model_path = model_path / 'voice_model.h5'
-    checkpointer = ModelCheckpoint(str(model_path), save_best_only=True, monitor='val_loss')
+
+    checkpointer = ModelCheckpoint(model_path, save_best_only=True, monitor='val_loss')
     lr_reduce = ReduceLROnPlateau(monitor='val_loss', factor=0.9, patience=20, min_lr=0.000001)
     model_training = model.fit(x_train, y_train,
                                batch_size=64,
-                               epochs=1000,
+                               epochs=10,
                                validation_data=(x_test, y_test),
                                callbacks=[checkpointer, lr_reduce])
 
