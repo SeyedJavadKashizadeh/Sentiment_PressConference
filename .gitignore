@@ -216,3 +216,7 @@ __marimo__/
 # training datasets
 dataset_training/*
 !dataset_trainings/.gitkeep
+
+# converted_16khz
+converted_16khz/*
+!converted_16khz/.gitkeep
