@@ -121,7 +121,7 @@ def train_model(model_path, infile):
     lr_reduce = ReduceLROnPlateau(monitor='val_loss', factor=0.9, patience=20, min_lr=0.000001)
     model_training = model.fit(x_train, y_train,
                                batch_size=64,
-                               epochs=10,
+                               epochs=1000,
                                validation_data=(x_test, y_test),
                                callbacks=[checkpointer, lr_reduce])
 
