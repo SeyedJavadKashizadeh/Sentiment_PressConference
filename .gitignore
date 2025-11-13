@@ -220,3 +220,7 @@ dataset_training/*
 # converted_16khz
 converted_16khz/*
 !converted_16khz/.gitkeep
+
+# avoid track merging_features_training
+merged_features_training.csv
+merged.csv
