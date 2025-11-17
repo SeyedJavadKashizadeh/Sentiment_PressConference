@@ -349,7 +349,7 @@ def main(
 
 if __name__ == "__main__":
     # Example local test 
-    root = Path(__file__).resolve().parents[2] / "dataset_training" / "EmoDB"
+    root = Path(__file__).resolve().parents[2] / "data_training/raw_data" / "EmoDB"
     _ = main(
         root,
         gender="female",

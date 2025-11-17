@@ -11,6 +11,9 @@ scipy
 seaborn 
 pydub
 huggingface_hub
+soundfill
+ffmpeg
 librosa==0.11.0
 opensmile==2.6.0
 kagglehub==0.3.13
+

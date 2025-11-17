@@ -224,3 +224,15 @@ converted_16khz/*
 # avoid track merging_features_training
 merged_features_training.csv
 merged.csv
+
+# FOMC datasets
+data_FOMC/*
+!data_FOMC/.gitkeep
+
+# Training datasets
+data_training/*
+!data_training/.gitkeep
+
+# Outputs
+Outputs/*
+!Outputs/.gitkeep

@@ -380,5 +380,5 @@ def main(
 
 if __name__ == "__main__":
     # Example local test 
-    root = Path(__file__).resolve().parents[2] / "dataset_training" / "RAVDESS"
+    root = Path(__file__).resolve().parents[2] / "data_training/raw_data" / "RAVDESS"
     selected = main(root, gender="female", emotion_in=["happy", "fear", 4])

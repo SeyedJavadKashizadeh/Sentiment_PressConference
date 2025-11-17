@@ -1,34 +1,44 @@
 """
 scripts/assembling_training_datasets/assembler.py
 =================================================
-Library code that orchestrates dataset-specific parsers to assemble a unified
-list of training audio file paths.
+Utilities for assembling **training audio datasets** (EmoDB, RAVDESS, TESS)
+into a single merged manifest that can later be used for feature extraction.
 
-This module imports your dataset parsers:
+This module delegates all dataset-specific parsing to the corresponding
+dataset parsers in `scripts.training_datasets_parsing` and provides:
 
-- scripts.training_datasets_parsing.EMODB.main
-- scripts.training_datasets_parsing.RAVDESS.main
-- scripts.training_datasets_parsing.TESS.main
+    • normalize_emotion_inputs(...)
+        Convert mixed emotion specifications (IDs or names) into canonical
+        universal emotion IDs.
 
-and runs them with consistent filters:
-    * gender: "male" / "female" (applies to EmoDB & RAVDESS; ignored for TESS)
-    * emotions: a list of items (id/name/code) passed through to each parser.
-      Each parser is responsible for normalizing emotion inputs.
+    • assemble_all_datasets(dataset_root, gender, emotions)
+        Run all three dataset parsers (EmoDB, RAVDESS, TESS) and return a
+        dictionary mapping dataset name -> list of parsed file objects.
 
-Return value is a dict:
-    {
-        "emodb":   List[Path],
-        "ravdess": List[Path],
-        "tess":    List[Path],
-    }
-with only the datasets you ask for.
+    • save_manifest(results, output_folder)
+        Write the merged CSV manifest with columns:
+            dataset, path, emotion_name, emotion_code
 
-Design notes
-------------
-- We return bare Paths to keep a common type across datasets (their parsers
-  return dataset-specific dataclasses; we convert to .path uniformly).
-- TESS does not support a gender filter (the dataset is all female). If
-  a gender is requested, we print a one-line info and proceed ignoring it.
+Assumptions
+-----------
+- The training datasets already exist locally under `dataset_root` in the
+  following structure:
+        dataset_root/
+            EmoDB/
+            RAVDESS/
+            TESS/
+
+- Each dataset has its own parser implementing a `main()` function that
+  returns normalized audio-file metadata (path + emotion info).
+
+- Gender filtering is supported for EmoDB and RAVDESS. TESS uses only female
+  speakers; the `speaker` argument is handled internally.
+
+Use case
+--------
+This module is typically used by the orchestration script
+`helpers/run_extract_training_features.py` to build the merged `merged.csv`
+before extracting acoustic features.
 """
 from __future__ import annotations
 

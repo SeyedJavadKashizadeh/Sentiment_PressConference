@@ -1,3 +1,22 @@
+"""
+scripts/extract_features_training/extract.py
+=================================================
+Audio conversion and feature extraction utilities for the **training datasets**.
+
+This module provides:
+    • Conversion of WAV files to mono / 16 kHz using ffmpeg
+      (order-preserving; failed conversions return None).
+
+    • Extraction of acoustic features:
+          - Librosa (193-dim vector: MFCC, chroma, mel, contrast, tonnetz)
+          - OpenSMILE (eGeMAPSv02 Functionals)
+
+All functions maintain the input order of audio paths so that features can be
+safely concatenated to a merged training manifest. Missing or failed rows are
+filled with NaN.
+"""
+
+
 from __future__ import annotations
 
 from pathlib import Path
