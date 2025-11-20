@@ -1,10 +1,12 @@
 import os
-os.environ['TF_USE_LEGACY_KERAS'] = '1'
+os.environ['KERAS_BACKEND'] = 'tensorflow'   # use TF backend with Keras 3
+os.environ.pop('TF_USE_LEGACY_KERAS', None)
 import pandas as pd
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.models import load_model, Model  # typed import
-
+import keras
+from keras.models import load_model, Model
+from keras.layers import InputLayer
 
 def processing_data(df):
     df = df.drop([col for col in df.columns if "item" in col], axis=1)
@@ -24,12 +26,15 @@ def processing_data(df):
     return x_pred
 
 def audio_pred(model_path, infile, outfile):
-    df=pd.read_csv(infile, sep=',')
+    
+    df=pd.read_parquet(infile, engine='pyarrow')
     emotions = ['happy', 'pleasant_surprise', 'neutral', 'sad', 'angry']
     dictionary = {0: 'happy', 1: 'pleasant_surprise', 2: 'neutral', 3: 'sad', 4: 'angry'}
     x_pred = processing_data(df)
 
-    model: Model = load_model(model_path)
+    model: Model = load_model(
+        str(model_path)
+        )
     y_pred = np.argmax(model.predict(x_pred), axis=-1)
     output_data = pd.DataFrame({
         'item': df.index,
