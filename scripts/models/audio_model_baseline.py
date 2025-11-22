@@ -81,7 +81,7 @@ from tensorflow.keras.callbacks import (
     CSVLogger,
 )
 from tensorflow.keras.utils import to_categorical
-from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, f1_score, recall_score
+from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, f1_score, recall_score, classification_report
 from sklearn.model_selection import StratifiedKFold
 
 EMOTIONS = ['happy', 'neutral', 'sad', 'angry']
@@ -344,6 +344,7 @@ def train_model(model_path, infile, metrics_dir, emotions:List = EMOTIONS):
                               labels=[emotions2int[e] for e in emotions])
     matrix = pd.DataFrame(matrix, index=[f"t_{e}" for e in emotions],columns=[f"p_{e}" for e in emotions])
     print(matrix)
+    print(classification_report(y_test, y_pred, target_names=emotions, digits=4))
     
     return model, int2emotions, emotions2int
 
