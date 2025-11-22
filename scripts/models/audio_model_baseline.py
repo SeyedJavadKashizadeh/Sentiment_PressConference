@@ -306,6 +306,8 @@ def train_model(model_path, infile, metrics_dir, emotions:List = EMOTIONS):
     model.add(Activation(gelu)) 
     model.add(Dropout(dropout))
 
+    model.add(Dense(target_class, activation="softmax"))
+    
     model.compile(
         loss=loss,
         optimizer=optimizer,
