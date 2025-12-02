@@ -68,7 +68,7 @@ import tensorflow as tf
 from tensorflow.keras.models import load_model, Model
 
 
-EMOTIONS = ['happy', 'pleasant_surprise', 'neutral', 'sad', 'angry']
+EMOTIONS = ['happy', 'neutral', 'sad', 'angry']
 
 def processing_data(df: pd.DataFrame) -> np.ndarray:
     """

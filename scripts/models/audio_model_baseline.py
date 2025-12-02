@@ -59,8 +59,10 @@ import math
 import pandas as pd
 import numpy as np
 from typing import List
+from itertools import product
 import tensorflow as tf
-from tensorflow.keras.layers import LSTM, Dense, Activation, Dropout
+from tensorflow.keras.layers import LSTM, Dense, Activation, Dropout, BatchNormalization
+from tensorflow.keras.activations import gelu
 from tensorflow.keras.optimizers import (
     SGD,
     RMSprop,
@@ -80,9 +82,10 @@ from tensorflow.keras.callbacks import (
     CSVLogger,
 )
 from tensorflow.keras.utils import to_categorical
-from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, f1_score, recall_score
+from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, f1_score, recall_score, classification_report
+from sklearn.model_selection import StratifiedKFold
 
-EMOTIONS = ['happy', 'pleasant_surprise', 'neutral', 'sad', 'angry']
+EMOTIONS = ['happy', 'neutral', 'sad', 'angry']
 
 def split_data(emotions, filename, train_set):
     """
@@ -145,7 +148,7 @@ def split_data(emotions, filename, train_set):
         if emotion in emotions
     ]
 
-    int2emotions = {i: e for i, e in enumerate(emotions, start=1)}
+    int2emotions = {i: e for i, e in enumerate(emotions)}
     emotions2int = {v: k for k, v in int2emotions.items()}
 
     # Number of training examples per emotion
@@ -280,7 +283,7 @@ def train_model(model_path, infile, metrics_dir, emotions:List = EMOTIONS):
     y_train = to_categorical([emotions2int[str(e[0])] for e in y_train])
     y_test = to_categorical([emotions2int[str(e[0])] for e in y_test])
     
-    target_class = len(emotions) + 1
+    target_class = len(emotions)
     input_length = x_train.shape[1]
 
     dense_units = 200
@@ -290,13 +293,22 @@ def train_model(model_path, infile, metrics_dir, emotions:List = EMOTIONS):
 
     model = Sequential()
     model.add(Dense(dense_units, input_dim=input_length))
+    model.add(BatchNormalization())
+    model.add(Activation(gelu)) 
     model.add(Dropout(dropout))
-    model.add(Dense(dense_units))
-    model.add(Dropout(dropout))
-    model.add(Dense(dense_units))
-    model.add(Dropout(dropout))
-    model.add(Dense(target_class, activation="softmax"))
 
+    model.add(Dense(dense_units))
+    model.add(BatchNormalization())
+    model.add(Activation(gelu)) 
+    model.add(Dropout(dropout))
+
+    model.add(Dense(dense_units))
+    model.add(BatchNormalization())
+    model.add(Activation(gelu)) 
+    model.add(Dropout(dropout))
+
+    model.add(Dense(target_class, activation="softmax"))
+    
     model.compile(
         loss=loss,
         optimizer=optimizer,
@@ -333,5 +345,194 @@ def train_model(model_path, infile, metrics_dir, emotions:List = EMOTIONS):
                               labels=[emotions2int[e] for e in emotions])
     matrix = pd.DataFrame(matrix, index=[f"t_{e}" for e in emotions],columns=[f"p_{e}" for e in emotions])
     print(matrix)
+    print(classification_report(y_test, y_pred, target_names=emotions, digits=4))
     
     return model, int2emotions, emotions2int
+
+def create_model(input_length, target_class, dense_units=200, dropout=0.3, optimizer="adam"):
+
+    model = Sequential()
+    model.add(Dense(dense_units, input_dim=input_length))
+    model.add(BatchNormalization())
+    model.add(Activation(gelu))
+    model.add(Dropout(dropout))
+
+    model.add(Dense(dense_units))
+    model.add(BatchNormalization())
+    model.add(Activation(gelu))
+    model.add(Dropout(dropout))
+
+    model.add(Dense(dense_units))
+    model.add(BatchNormalization())
+    model.add(Activation(gelu))
+    model.add(Dropout(dropout))
+
+    model.add(Dense(target_class, activation="softmax"))
+
+    model.compile(
+        loss="categorical_crossentropy",
+        optimizer=optimizer,
+        metrics=[CategoricalAccuracy(), Precision(), Recall()],
+    )
+
+    return model
+
+def train_model_kfold(
+    model_path,
+    infile,
+    n_splits=5,
+    emotions: List = EMOTIONS,
+    dense_units=200,
+    dropout=0.3,
+    optimizer="adam"
+):
+
+    df = pd.read_csv(infile, sep=",")
+
+    # Remove specific columns
+    df = df.drop([col for col in df.columns if "contrast" in col], axis=1)
+    df = df.drop([col for col in df.columns if "tonnetz" in col], axis=1)
+    df = df.drop([col for col in df.columns if "path" in col], axis=1)
+    df = df.drop([col for col in df.columns if "dataset" in col], axis=1)
+    df = df.drop([col for col in df.columns if "emotion_code" in col], axis=1)
+
+    # Balanced dataset
+    X = df.drop(columns=["emotion_name"]).to_numpy()
+    y = df["emotion_name"].to_numpy()
+
+    mask = np.array([label in emotions for label in y])
+    X = X[mask]
+    y = y[mask]
+
+    int2emotions = {i: e for i, e in enumerate(emotions)}
+    emotions2int = {v: k for k, v in int2emotions.items()}
+
+    y_int = np.array([emotions2int[label] for label in y])
+
+    target_class = len(emotions)
+    input_length = X.shape[1]
+
+    # Stratified K-fold
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+
+    all_results = []
+    fold = 1
+
+    for train_idx, test_idx in skf.split(X, y_int):
+
+        X_train, X_test = X[train_idx], X[test_idx]
+        y_train_raw, y_test_raw = y_int[train_idx], y_int[test_idx]
+
+        y_train = to_categorical(y_train_raw, num_classes=target_class)
+        y_test = to_categorical(y_test_raw, num_classes=target_class)
+
+        # Build model using hyperparameters
+        model = create_model(
+            input_length=input_length,
+            target_class=target_class,
+            dense_units=dense_units,
+            dropout=dropout,
+            optimizer=optimizer
+        )
+
+        # Callbacks
+        checkpointer = ModelCheckpoint(
+            f"{model_path}_fold{fold}.h5",
+            save_best_only=True,
+            monitor="val_loss",
+        )
+        lr_reduce = ReduceLROnPlateau(
+            monitor="val_loss", factor=0.9, patience=20, min_lr=1e-6
+        )
+
+        # Train
+        model.fit(
+            X_train,
+            y_train,
+            batch_size=64,
+            epochs=1000,
+            validation_data=(X_test, y_test),
+            callbacks=[checkpointer, lr_reduce],
+            verbose=1,
+        )
+
+        # Evaluate
+        y_pred = np.argmax(model.predict(X_test), axis=-1)
+        y_true = y_test_raw
+
+        acc = accuracy_score(y_true, y_pred)
+        prec = precision_score(y_true, y_pred, average="macro")
+        rec = recall_score(y_true, y_pred, average="macro")
+        f1 = f1_score(y_true, y_pred, average="macro")
+
+        print(f"\nFOLD {fold} RESULTS:")
+        print(f"Accuracy : {acc:.4f}")
+        print(f"Precision: {prec:.4f}")
+        print(f"Recall   : {rec:.4f}")
+        print(f"F1-score : {f1:.4f}")
+
+        all_results.append({
+            "fold": fold,
+            "accuracy": acc,
+            "precision": prec,
+            "recall": rec,
+            "f1": f1,
+        })
+
+        fold += 1
+
+    results_df = pd.DataFrame(all_results)
+
+    print("\nFinal K-Fold Results:")
+    print(results_df)
+
+    print("\nAverage Metrics:")
+    print(results_df.mean())
+
+    return results_df, int2emotions, emotions2int
+
+def grid_search(model_path, infile, emotions: List = EMOTIONS):
+    param_grid = {
+        "dense_units": [100, 200, 300],
+        "dropout": [0.1, 0.3, 0.5],
+        "optimizer": ["adam"],
+    }
+
+    keys, values = zip(*param_grid.items())
+    grid_combinations = [dict(zip(keys, v)) for v in product(*values)]
+
+    all_results = []
+
+    for params in grid_combinations:
+        print(" Testing hyperparameters:", params)
+
+        df, _, _ = train_model_kfold(
+            model_path=model_path,
+            infile=infile,
+            emotions=emotions,
+            dense_units=params["dense_units"],
+            dropout=params["dropout"],
+            optimizer=params["optimizer"],
+            n_splits=5
+        )
+
+        avg_f1 = df["f1"].mean()
+        avg_acc = df["accuracy"].mean()
+
+        all_results.append({
+            **params,
+            "avg_f1": avg_f1,
+            "avg_accuracy": avg_acc,
+        })
+
+    results_df = pd.DataFrame(all_results)
+
+    print("\nGRID SEARCH RESULTS")
+    print(results_df.sort_values(by="avg_f1", ascending=False))
+
+    best = results_df.sort_values(by="avg_f1", ascending=False).iloc[0]
+
+    print("\n BEST HYPERPARAMETERS")
+    print(best)
+
+    return results_df, best
