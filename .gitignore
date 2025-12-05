@@ -236,3 +236,6 @@ data_training/*
 # Outputs
 Outputs/*
 !Outputs/.gitkeep
+
+# Search.py
+search.py

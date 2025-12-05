@@ -2,6 +2,8 @@
 run_extract_training_features.py
 ====================================
 
+Description
+-------------------------
 End-to-end orchestration script to prepare the **training data** for
 speech–emotion modelling. It performs THREE stages in a single call:
 
@@ -9,7 +11,7 @@ speech–emotion modelling. It performs THREE stages in a single call:
        (download them if necessary, via a helper module).
 
     2) Assemble a merged CSV manifest of audio files across multiple
-       datasets (EMODB, RAVDESS, TESS, IEMOCAP), with optional filtering
+       datasets (EMODB, RAVDESS, TESS), with optional filtering
        by gender and emotions.
 
     3) Extend that merged CSV with acoustic features computed using
@@ -19,8 +21,10 @@ speech–emotion modelling. It performs THREE stages in a single call:
        and concatenates them to the original rows in-place (aligned by
        input order).
 
+Structure
+-------------------------------
 Datasets handled
-----------------
+^^^^^^^^^^^^^^^^
 The following datasets can be downloaded (if missing) into `--raw-data-dir`:
 
     - RAVDESS : "uwrfkaggler/ravdess-emotional-speech-audio"
@@ -32,8 +36,7 @@ Downloads are delegated to:
     scripts.download_training_datasets.download_audio.download_audio_files_kaggle
 
 Stage 2: assembling / filtering
--------------------------------
-
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Assembling is delegated to:
 
     scripts.assembling_training_datasets.assembler
@@ -48,8 +51,7 @@ The resulting manifest CSV has at least:
     dataset,path,emotion_name,emotion_code
 
 Stage 3: feature extraction
----------------------------
-
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 From the manifest CSV, the script:
 
 1. Converts WAVs to mono/16 kHz with ffmpeg (files saved in `--conversion-dir`).
@@ -62,13 +64,13 @@ From the manifest CSV, the script:
 3. Concatenates features to the original manifest DataFrame and writes
    `--out-file`.
 
-Usage
------
+How to use with examples
+------------------------
 
 Example: download datasets if needed, assemble training manifest for selected
 emotions, and extract both Librosa + OpenSMILE features:
 
-    python helpers/run_extract_training_features.py \
+    python run.py extract-training-features \
         --gender female \
         --emotions happy fear \
         --manifest data_training/merged.csv \
@@ -88,7 +90,7 @@ Important options
                                    assembler).
 
     --manifest PATH                Where to write the merged manifest CSV
-                                   (default: <repo>/data_training/merged.csv).
+                                   (default: <repo>/data_training/merged).
 
     --out-file PATH                Where to write the final features CSV
                                    (default: <repo>/data_training/merged_with_features.csv).
@@ -107,7 +109,6 @@ Important options
 
 Requirements
 ------------
-
 - ffmpeg installed and on PATH (or pass a custom path in `--ffmpeg`).
 - Python: pandas, numpy, librosa, opensmile, tqdm, soundfile, kagglehub.
 - Helper functions are expected in:
@@ -118,17 +119,29 @@ Requirements
 
 from __future__ import annotations
 
+###############
+# Standard libraries
+###############
 import argparse
 import sys
 from pathlib import Path
 from typing import List
 
+###############
+# Add project root to sys.path
+###############
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+###############
+# Third-party libraries
+###############
 import pandas as pd
 
-# Project ROOT
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(ROOT))
-
+###############
+# Project imports
+###############
 from scripts.download_training_datasets.download_audio import (  # type: ignore
     download_audio_files_kaggle,
 )
@@ -144,11 +157,11 @@ from scripts.extract_features_training.extract import (  # type: ignore
     build_librosa_feature_matrix,
     build_opensmile_feature_matrix,
 )
+from utils import set_global_seed
 
-###############################################################################
+###############
 # Feature extraction core routine
-###############################################################################
-
+###############
 def extract_and_merge_from_csv(
     in_csv: Path | str,
     out_csv: Path | str,
@@ -168,7 +181,7 @@ def extract_and_merge_from_csv(
         1) Converts all WAVs in the CSV to mono / 16 kHz (ffmpeg)
         2) Extracts acoustic features depending on `engine`
         3) Writes one or multiple output CSVs:
-        
+
            engine = "librosa":
                <out_csv> = base + Librosa features
 
@@ -202,7 +215,6 @@ def extract_and_merge_from_csv(
         DataFrame containing the extracted features. When engine="both",
         this is the merged features table.
     """
-    # Load & validate, as you already do
     in_csv = Path(in_csv)
     out_csv = Path(out_csv)
     out_csv.parent.mkdir(parents=True, exist_ok=True)
@@ -225,9 +237,6 @@ def extract_and_merge_from_csv(
         ffmpeg_exe=ffmpeg_exe,
     )
 
-    # ------------------------------------------------------------------
-    # Feature extraction + saving
-    # ------------------------------------------------------------------
     base_reset = base.reset_index(drop=True)
     librosa_df = None
     opensmile_df = None
@@ -236,9 +245,9 @@ def extract_and_merge_from_csv(
     suffix = out_csv.suffix or ".csv"
 
     # Paths for the three possible outputs
-    librosa_csv   = out_csv if engine == "librosa" else out_csv.with_name(f"{stem}_librosa{suffix}")
+    librosa_csv = out_csv if engine == "librosa" else out_csv.with_name(f"{stem}_librosa{suffix}")
     opensmile_csv = out_csv if engine == "opensmile" else out_csv.with_name(f"{stem}_opensmile{suffix}")
-    merged_csv    = out_csv  # for engine == "both"
+    merged_csv = out_csv  # for engine == "both"
 
     # Librosa features
     if engine in ("librosa", "both"):
@@ -262,7 +271,7 @@ def extract_and_merge_from_csv(
         if engine == "opensmile":
             return df_smile
 
-    # Librosa + OpenSMILE (engine == "both")
+    # Librosa + OpenSMILE
     if engine == "both":
         if librosa_df is None or opensmile_df is None:
             raise RuntimeError("Engine 'both' requires both Librosa and OpenSMILE features.")
@@ -281,11 +290,12 @@ def extract_and_merge_from_csv(
 
         return df_merged
 
+    raise ValueError(f"Unknown engine: {engine}")
 
-###############################################################################
+
+###############
 # Parser
-###############################################################################
-
+###############
 def _parse_args() -> argparse.Namespace:
     def emo_token(x: str):
         try:
@@ -293,7 +303,7 @@ def _parse_args() -> argparse.Namespace:
         except ValueError:
             return x.lower()
 
-    p = argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         description=(
             "Download training datasets (if needed), assemble a filtered "
             "training manifest, and extract acoustic features into a single CSV."
@@ -301,7 +311,7 @@ def _parse_args() -> argparse.Namespace:
     )
 
     # Stage 1 – raw data location
-    p.add_argument(
+    parser.add_argument(
         "--raw-data-dir",
         type=Path,
         default=ROOT / "data_training" / "raw_data",
@@ -310,21 +320,21 @@ def _parse_args() -> argparse.Namespace:
             "(default: <repo>/data_training/raw_data)."
         ),
     )
-    p.add_argument(
+    parser.add_argument(
         "--no-download",
         action="store_true",
         help="Skip datasets download step (only ensure raw_data_dir exists).",
     )
 
     # Stage 2 – assembling / filtering
-    p.add_argument(
+    parser.add_argument(
         "--gender",
         type=str,
         choices=sorted(VALID_GENDERS),
         default=None,
         help="Optional gender filter: male or female.",
     )
-    p.add_argument(
+    parser.add_argument(
         "--emotions",
         nargs="+",
         type=emo_token,
@@ -334,10 +344,10 @@ def _parse_args() -> argparse.Namespace:
             "Default: all universal IDs known by the assembler."
         ),
     )
-    p.add_argument(
+    parser.add_argument(
         "--manifest",
         type=Path,
-        default=ROOT / "data_training",
+        default=ROOT / "data_training" / "merged.csv",
         help=(
             "Path where the assembled training manifest CSV will be written "
             "(default: <repo>/data_training/merged.csv)."
@@ -345,7 +355,7 @@ def _parse_args() -> argparse.Namespace:
     )
 
     # Stage 3 – feature extraction
-    p.add_argument(
+    parser.add_argument(
         "--out-file",
         type=Path,
         default=ROOT / "data_training" / "merged_with_features.csv",
@@ -354,14 +364,14 @@ def _parse_args() -> argparse.Namespace:
             "(default: <repo>/data_training/merged_with_features.csv)."
         ),
     )
-    p.add_argument(
+    parser.add_argument(
         "--engine",
         type=str,
         choices=["librosa", "opensmile", "both"],
         default="librosa",
         help="Feature extraction engine (default: librosa).",
     )
-    p.add_argument(
+    parser.add_argument(
         "--conversion-dir",
         type=Path,
         default=ROOT / "data_training" / "converted_16khz",
@@ -370,31 +380,30 @@ def _parse_args() -> argparse.Namespace:
             "(default: <repo>/data_training/converted_16khz)."
         ),
     )
-    p.add_argument(
+    parser.add_argument(
         "--no-validate",
         action="store_true",
         help="Skip CSV header validation before feature extraction.",
     )
-    p.add_argument(
+    parser.add_argument(
         "--ffmpeg",
         type=Path,
-        default=Path(rf"C:\ffmpeg\bin\ffmpeg.exe"),
+        default=Path(r"C:\ffmpeg\bin\ffmpeg.exe"),
         help="Path to ffmpeg executable (or keep default if on PATH).",
     )
 
-    return p.parse_args()
+    return parser.parse_args()
 
 
-###############################################################################
+###############
 # Main
-###############################################################################
-
+###############
 def main() -> None:
+    set_global_seed()
     args = _parse_args()
 
-    # ------------------------------------------------------------------
-    # Stage 1 – Ensure / download raw datasets
-    # ------------------------------------------------------------------
+    ### Stage 1 – Ensure / download raw datasets
+    ## Prepare raw_data_dir and optionally call Kaggle downloader
     raw_data_dir: Path = args.raw_data_dir
     raw_data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -404,9 +413,8 @@ def main() -> None:
         print(f"[INFO] Ensuring datasets exist under: {raw_data_dir}")
         download_audio_files_kaggle(local_root=raw_data_dir, download_one=False)
 
-    # ------------------------------------------------------------------
-    # Stage 2 – Assemble training manifest with filters
-    # ------------------------------------------------------------------
+    ### Stage 2 – Assemble training manifest
+    ## Filter by gender and emotions, then save manifest CSV
     try:
         normalized_emotions: List[int] = normalize_emotion_inputs(args.emotions)
     except ValueError as e:
@@ -432,9 +440,8 @@ def main() -> None:
     manifest_path = save_manifest(results, args.manifest)
     print(f"\n[INFO] Manifest written to: {manifest_path}")
 
-    # ------------------------------------------------------------------
-    # Stage 3 – Extract features and merge into CSV
-    # ------------------------------------------------------------------
+    ### Stage 3 – Extract features and merge into CSV
+    ## Call extract_and_merge_from_csv with chosen engine
     merged = extract_and_merge_from_csv(
         in_csv=manifest_path,
         out_csv=args.out_file,

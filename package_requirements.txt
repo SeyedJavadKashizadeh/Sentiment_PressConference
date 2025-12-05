@@ -1,3 +1,5 @@
+fastparquet
+pyarrow
 numpy
 pandas 
 matplotlib 
@@ -5,15 +7,16 @@ requests
 tqdm 
 python-dotenv 
 scikit-learn 
-tensorflow==2.15.*  
+tensorflow==2.16.1  
 tf-keras
 scipy 
 seaborn 
 pydub
 huggingface_hub
+soundfile==0.13.1
 soundfill
 ffmpeg
 librosa==0.11.0
 opensmile==2.6.0
 kagglehub==0.3.13
-
+scikeras == 0.13.0
