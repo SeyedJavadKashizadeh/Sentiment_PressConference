@@ -237,6 +237,7 @@ data_training/*
 Outputs/*
 !Outputs/.gitkeep
 
-# Search.py
+# Garbage
 search.py
 run_pipeline.sh
+.vscode
