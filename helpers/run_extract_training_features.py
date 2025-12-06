@@ -73,7 +73,7 @@ emotions, and extract both Librosa + OpenSMILE features:
     python run.py extract-training-features \
         --gender female \
         --emotions happy fear \
-        --manifest data_training/merged.csv \
+        --manifest data_training/merged \
         --out-file data_training/merged_with_features.csv \
         --engine both
 

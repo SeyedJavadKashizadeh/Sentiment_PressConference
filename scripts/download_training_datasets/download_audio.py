@@ -38,6 +38,34 @@ DATASET_MAP: Dict[str, str] = {
     "EmoDB": "piyushagni5/berlin-database-of-emotional-speech-emodb",
 }
 
+################
+# Helper for Tess
+################
+def find_real_tess_root(cached_dir: Path) -> Path:
+    """
+    Detects and returns the actual root directory of TESS audio folders,
+    avoiding duplicated wrapper folders from the Kaggle archive.
+    """
+    current = cached_dir
+
+    seen = set()
+    while True:
+        subdirs = [d for d in current.iterdir() if d.is_dir()]
+
+        # stop if multiple subdirectories → likely the real audio level
+        if len(subdirs) != 1:
+            return current
+
+        next_dir = subdirs[0]
+
+        # detect infinite nesting of same-name folders
+        if next_dir.name in seen:
+            break
+
+        seen.add(next_dir.name)
+        current = next_dir
+
+    return current
 
 def get_audio_files_by_dataset(local_root: Path) -> Dict[str, List[Path]]:
     """
@@ -119,7 +147,7 @@ def download_audio_files_kaggle(
     """
     local_root = local_root.resolve()
     local_root.mkdir(parents=True, exist_ok=True)
-
+    
     local_paths: Dict[str, Path] = {}
 
     # Restrict to first dataset if requested
@@ -128,7 +156,13 @@ def download_audio_files_kaggle(
         items = items[:1]
 
     for dataset_name, kaggle_id in items:
-        target_dir = local_root / dataset_name
+        if local_root.name == dataset_name:
+            target_dir = local_root
+        else:
+            target_dir = local_root / dataset_name
+        
+        print(f"[{dataset_name}] local_root = {local_root}")
+        print(f"[{dataset_name}] target_dir = {target_dir}")
 
         # If dataset already exists, skip download
         if target_dir.exists():
@@ -142,11 +176,24 @@ def download_audio_files_kaggle(
             cached_dir = Path(cached_path).resolve()
             print(f"Downloaded '{dataset_name}' to Kaggle cache: {cached_dir}")
 
+            # Avoid downloading twice TESS datafile because the publisher put twice the files in the folder
+            if dataset_name == "TESS":
+                src_dir = find_real_tess_root(cached_dir)
+            else:
+                src_dir = cached_dir
+            
             # Copy from Kaggle cache into our desired location
-            shutil.copytree(cached_dir, target_dir, dirs_exist_ok=True)
+            shutil.copytree(src_dir, target_dir, dirs_exist_ok=True)
             print(f"Copied '{dataset_name}' dataset to: {target_dir}")
 
+            if dataset_name == "TESS":
+                nested_dup = target_dir / "TESS Toronto emotional speech set data"
+                if nested_dup.exists():
+                    print(f"Removing nested duplicate TESS dir: {nested_dup}")
+                    shutil.rmtree(nested_dup)
+
             local_paths[dataset_name] = target_dir.resolve()
+
         except Exception as e:
             print(f"Failed to download dataset '{dataset_name}' ({kaggle_id}): {e}")
 

@@ -63,6 +63,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, ParameterGrid
 from sklearn.metrics import accuracy_score, f1_score, log_loss
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
 ###############
 # Project paths
@@ -84,17 +85,17 @@ from utils import set_global_seed
 # Hyperparameter grid for advanced model
 ###############
 ADVANCED_PARAM_GRID: Dict[str, Any] = {
-    "clf__model__num_layers":    [2,4,6],
-    "clf__model__dense_units":   [512],
-    "clf__model__dropout":       [0.2],
-    "clf__model__optimizer":     ["rmsprop"],
-    "clf__model__learning_rate": [1e-3],
-    "clf__batch_size":           [128],
-    "clf__epochs":               [100],
+    "clf__model__num_layers":    [6],
+    "clf__model__dense_units":   [128,256,512],
+    "clf__model__dropout":       [0.1, 0.3],
+    "clf__model__optimizer":     ["rmsprop", "adam"],
+    "clf__model__learning_rate": [1e-3, 3e-4],
+    "clf__batch_size":           [32, 64, 128],
+    "clf__epochs":               [80],
     "clf__model__use_batchnorm": [True],
     "clf__model__activation":    ["gelu"],
-    "clf__model__ridge_penalty": [0.0, 1e-8, 1e-5],
-    "clf__model__lasso_penalty": [0.0, 1e-8, 1e-5]
+    "clf__model__ridge_penalty": [1e-8, 1e-5],
+    "clf__model__lasso_penalty": [1e-8, 1e-5]
 }
 
 
@@ -185,6 +186,22 @@ def run_grid_search(
     for the advanced model.
     """
 
+    early_stopping = EarlyStopping(
+        monitor="val_loss",
+        patience=20,
+        min_delta=1e-4,
+        restore_best_weights=True,
+        verbose=1,
+    )
+
+    lr_plateau = ReduceLROnPlateau(
+        monitor="val_loss",
+        factor=0.5,
+        patience=5,
+        min_lr=1e-6,
+        verbose=1,
+    )
+
     ### Build SciKeras classifier inside a sklearn Pipeline
     ## StandardScaler -> KerasClassifier
     keras_clf = KerasClassifier(
@@ -195,6 +212,7 @@ def run_grid_search(
         random_state=seed,
         loss="sparse_categorical_crossentropy",
         validation_split=0.2,
+        callbacks=[early_stopping, lr_plateau],
     )
 
     pipe = Pipeline(
