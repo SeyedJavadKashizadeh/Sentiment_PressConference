@@ -9,6 +9,21 @@ from typing import List, Optional, Sequence
 
 sns.set_theme(style="whitegrid")
 
+EMOTION_PALETTE = {
+    "happy": "#E69F00",
+    "angry": "#D55E00",
+    "sad": "#56B4E9",
+    "neutral": "#999999",
+    "pleasant_surprise": "#009E73",  # for baselines
+}
+
+DATASET_PALETTE = {
+    "ravdess": "#0072B2",
+    "tess": "#CC79A7",
+    "emodb": "#009E73",
+    # add others if needed
+}
+
 def plot_emotion_distribution(
     data: pd.DataFrame,
     savepath: Path,
@@ -186,6 +201,7 @@ def tsne_embeddings_plots(
     Compute a 2D t-SNE embedding and generate:
         - tsne_by_emotion.png
         - tsne_by_dataset.png
+    Colors are fixed across runs using explicit palettes.
     """
     savepath.mkdir(parents=True, exist_ok=True)
 
@@ -212,8 +228,14 @@ def tsne_embeddings_plots(
 
     sns.set_theme(style="white")
 
-    # By emotion
+    ### By emotion
     if emotion_col in df_embed.columns:
+        df_embed[emotion_col] = pd.Categorical(
+            df_embed[emotion_col],
+            categories=list(EMOTION_PALETTE.keys()),
+            ordered=False,
+        )
+
         plt.figure(figsize=(7, 6))
         sns.scatterplot(
             data=df_embed,
@@ -223,6 +245,7 @@ def tsne_embeddings_plots(
             alpha=0.7,
             s=10,
             edgecolor="none",
+            palette=EMOTION_PALETTE,
         )
         plt.title("t-SNE embedding colored by emotion")
         plt.tight_layout()
@@ -233,8 +256,14 @@ def tsne_embeddings_plots(
     else:
         print(f"[warn] Column '{emotion_col}' not found; skipping emotion plot.")
 
-    # By dataset
+    ### By dataset
     if dataset_col in df_embed.columns:
+        df_embed[dataset_col] = pd.Categorical(
+            df_embed[dataset_col],
+            categories=list(DATASET_PALETTE.keys()),
+            ordered=False,
+        )
+
         plt.figure(figsize=(7, 6))
         sns.scatterplot(
             data=df_embed,
@@ -244,6 +273,7 @@ def tsne_embeddings_plots(
             alpha=0.7,
             s=10,
             edgecolor="none",
+            palette=DATASET_PALETTE,
         )
         plt.title("t-SNE embedding colored by dataset")
         plt.tight_layout()

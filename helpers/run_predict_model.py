@@ -30,6 +30,7 @@ How to use with examples
 Baseline model prediction:
 
     python run.py predict-model \
+        --mode    baseline
         --weights outputs/baseline/baseline_model.keras \
         --infile  data_fomc/features/features_merged.parquet \
         --outfile outputs/baseline/baseline_predictions.csv
@@ -37,6 +38,7 @@ Baseline model prediction:
 Advanced model prediction:
 
     python run.py predict-model \
+        --mode    advanced
         --weights outputs/both/advanced_model.keras \
         --infile  data_fomc/features/features_merged.parquet \
         --outfile outputs/both/advanced_predictions.csv

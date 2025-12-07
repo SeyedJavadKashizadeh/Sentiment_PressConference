@@ -85,17 +85,17 @@ from utils import set_global_seed
 # Hyperparameter grid for advanced model
 ###############
 ADVANCED_PARAM_GRID: Dict[str, Any] = {
-    "clf__model__num_layers":    [6],
-    "clf__model__dense_units":   [128,256,512],
-    "clf__model__dropout":       [0.1, 0.3],
-    "clf__model__optimizer":     ["rmsprop", "adam"],
-    "clf__model__learning_rate": [1e-3, 3e-4],
-    "clf__batch_size":           [32, 64, 128],
-    "clf__epochs":               [80],
+    "clf__model__num_layers":    [2],
+    "clf__model__dense_units":   [512],
+    "clf__model__dropout":       [0.1, 0.2, 0.3],
+    "clf__model__optimizer":     ["rmsprop"],
+    "clf__model__learning_rate": [1e-3],
+    "clf__batch_size":           [64, 128],
+    "clf__epochs":               [200],
     "clf__model__use_batchnorm": [True],
     "clf__model__activation":    ["gelu"],
-    "clf__model__ridge_penalty": [1e-8, 1e-5],
-    "clf__model__lasso_penalty": [1e-8, 1e-5]
+    "clf__model__ridge_penalty": [0.0, 1e-8, 1e-5],
+    "clf__model__lasso_penalty": [0.0, 1e-8, 1e-5]
 }
 
 
@@ -313,7 +313,7 @@ def run_cross_validation(
     training_dataset: Path,
     cv_splits: int,
     seed: int,
-    results_csv: Path = RESULTS_DIR / "results_advanced_with_L1_L2.csv",
+    results_csv: Path = RESULTS_DIR / "results_FINAL.csv",
 ) -> None:
     ### Load and split data
     ## Balanced split using shared utility

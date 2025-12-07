@@ -71,7 +71,7 @@ BASELINE_CONFIG = dict(
     optimizer="adam",
     learning_rate=1e-3,
     use_batchnorm=False,
-    activation="relu",
+    activation="linear",
     standardize_inputs=False,
 )
 
@@ -94,30 +94,16 @@ ADVANCED_DEFAULT_CONFIG = dict(
 def _get_activation(name: str) -> Callable:
     """
     Map a string identifier to a Keras activation function.
-
-    Parameters
-    ----------
-    name : str
-        Name of the activation function. Currently supported:
-        - "relu"
-        - "gelu"
-
-    Returns
-    -------
-    Callable
-        A callable activation function compatible with Keras layers.
-
-    Raises
-    ------
-    ValueError
-        If an unknown activation name is provided.
     """
     name = name.lower()
     if name == "relu":
         return tf.keras.activations.relu
     elif name == "gelu":
-        # Use the imported GELU implementation to keep a single reference.
         return gelu
+    elif name == "linear":
+        return tf.keras.activations.linear
+    elif name == "tanh":
+        return tf.keras.activations.tanh
     else:
         raise ValueError(f"Unknown activation: {name!r}")
 

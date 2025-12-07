@@ -102,7 +102,7 @@ sns.set_theme(style="whitegrid")
 ###############
 # Project libraries
 ###############
-from scripts.visualization.relationships import (
+from scripts.visualization.plot_experiments import (
     plot_hyperparameter_search_overview,
     generalization_and_overfitting_analysis,
     stability_across_folds_analysis,
@@ -124,13 +124,15 @@ def _load_results(results_csv: Path) -> pd.DataFrame:
         "param_clf__model__learning_rate": "lr",
         "param_clf__model__num_layers": "num_layers",
         "param_clf__model__optimizer": "optimizer",
-        "param_clf__model__ridge_penalty" : "lambda"
+        "param_clf__model__ridge_penalty" : "L2_pen",
+        "param_clf__model__lasso_penalty" : "L1_pen"
     }
 
     present = {k: v for k, v in rename_map.items() if k in df.columns}
     df = df.rename(columns=present)
 
-    needed = ["batch_size", "num_layers", "dense_units", "dropout", "lr", "optimizer"]
+    needed = ["batch_size", "num_layers", "dense_units", "dropout", "lr", "optimizer", "L2_pen", "L1_pen"]
+
     if all(col in df.columns for col in needed) and "config_id" not in df.columns:
         df["config_id"] = (
             "bs"
@@ -145,8 +147,11 @@ def _load_results(results_csv: Path) -> pd.DataFrame:
             + df["lr"].astype(str)
             + "-opt"
             + df["optimizer"].astype(str)
+            + "-l2"
+            + df["L2_pen"].astype(str)
+            + "-l1"
+            + df["L1_pen"].astype(str)
         )
-
     return df
 
 

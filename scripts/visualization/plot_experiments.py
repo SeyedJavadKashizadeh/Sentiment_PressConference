@@ -1,6 +1,7 @@
 
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib import gridspec
 from pathlib import Path
 import seaborn as sns
 
@@ -96,56 +97,105 @@ def stability_across_folds_analysis(
     savepath: Path,
     top_k: int = 4,
     target_metric: str = "Accuracy",
+    hparam_cols=None,
 ) -> None:
+    if hparam_cols is None:
+        hparam_cols = [
+            "optimizer",
+            "batch_size",
+            "num_layers",
+            "dense_units",
+            "lr",
+            "L1_pen",
+            "L2_pen",
+            "dropout",
+        ]
+
     savepath.mkdir(parents=True, exist_ok=True)
     topk = df.nlargest(top_k, metric_test)
 
     base_metric = metric_test.replace("mean_", "")
-
-    fold_cols = [
-        col for col in df.columns if col.startswith("split") and base_metric in col
-    ]
-
+    fold_cols = [c for c in df.columns if c.startswith("split") and base_metric in c]
     if not fold_cols:
         raise ValueError(
             f"No fold columns found for base metric '{base_metric}'. "
             f"Available columns: {list(df.columns)}"
         )
 
+    order = topk[labels_cols].tolist()
+
     long_df = topk.melt(
-        id_vars=labels_cols,
+        id_vars=[labels_cols],
         value_vars=fold_cols,
         var_name="fold",
         value_name=base_metric,
     )
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig = plt.figure(figsize=(14, 8))           
+    gs = gridspec.GridSpec(2, 1, height_ratios=[3, 2])
+
+    ax_box = fig.add_subplot(gs[0])
+    ax_tab = fig.add_subplot(gs[1])
+    ax_tab.axis("off")
+
     sns.boxplot(
         data=long_df,
         x=labels_cols,
         y=base_metric,
-        ax=ax,
+        order=order,
+        ax=ax_box,
     )
     sns.stripplot(
         data=long_df,
         x=labels_cols,
         y=base_metric,
-        ax=ax,
+        order=order,
+        ax=ax_box,
         color="red",
         size=5,
         jitter=True,
     )
 
-    ax.set_xlabel("Configuration")
-    ax.set_ylabel(f"{base_metric} per fold")
-    ax.set_title(f"Stability across folds for top {top_k} configurations")
-    plt.xticks(rotation=45, ha="right")
+    ax_box.set_xticklabels(range(1, len(order) + 1))
+    ax_box.set_xlabel("Configuration #")
+    ax_box.set_ylabel(f"{base_metric} per fold")
+    ax_box.set_title(f"Stability across folds for top {top_k} configurations")
+
+    hparams = (
+        topk[[labels_cols] + hparam_cols]
+        .drop_duplicates(labels_cols)
+        .set_index(labels_cols)
+        .loc[order]
+    )
+
+    col_labels = [
+        "opt",
+        "batch\nsize",
+        "layers",
+        "units",
+        "lr",
+        "L1",
+        "L2",
+        "dropout",
+    ]
+
+    table = ax_tab.table(
+        cellText=hparams.values,
+        rowLabels=[str(i) for i in range(1, len(order) + 1)],
+        colLabels=col_labels,
+        cellLoc="center",
+        loc="center",
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(9)
+    table.scale(1, 1.3)
+
     plt.tight_layout()
     outfile = savepath / f"stability_across_folds_{target_metric}.png"
     plt.savefig(outfile, dpi=300)
+    plt.close(fig)
     print(f"[saved] {outfile}")
 
-    plt.close(fig)
 
 
 def computational_cost_analysis(
@@ -165,7 +215,7 @@ def computational_cost_analysis(
         df[time_metric],
         df[test_metric],
         c=df[main_hp],
-        s=20 + 100 * df[secondary_hp],
+        s=df[secondary_hp]/10,
         cmap="viridis",
     )
 
