@@ -15,7 +15,8 @@ from typing import List
 #from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, f1_score, recall_score
 import datetime
 from pathlib import Path
-
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 def subset_VOMP_timeframes(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -61,6 +62,7 @@ def load_predictions(pred_file: Path) -> pd.DataFrame:
     raw_df['chairman'] = extracted_data[2]
     raw_df.set_index('date', inplace=True)
     return raw_df
+
 def load_VOMP_tones(vomp_tones_file: Path) -> pd.DataFrame:
     """
     Load VOMP tone data from a CSV file.
@@ -99,7 +101,6 @@ def load_VOMP_classifications(vomp_class_file: Path) -> pd.DataFrame:
     return df
 
 
-
 def calculate_voice_tone(predictions: pd.DataFrame):
     """
     following the Voice of monetary policy paper to calculate the tone metric
@@ -126,7 +127,6 @@ def calculate_voice_tone(predictions: pd.DataFrame):
     voice_tone = pd.concat([voice_tone, daily_counts], axis=1)
     # Return a DataFrame with the calculated tone for each date
     return voice_tone
-
 
 def compare_predictions_to_VOMP(tone_metric: pd.DataFrame, vomp_classifications: pd.DataFrame, vomp_tones: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -156,7 +156,7 @@ def compare_predictions_to_VOMP(tone_metric: pd.DataFrame, vomp_classifications:
         'Positive responses': 'positive_count_vomp', 
         'Neutral responses': 'neutral_count_vomp',
         'Negative responses': 'negative_count_vomp', 
-        'Tone': 'tone_vomp'
+        'tone': 'tone_vomp'
     })
     
     # Create aggregated metrics DataFrame matching VOMP classifications structure
@@ -235,6 +235,43 @@ def compare_predictions_to_VOMP(tone_metric: pd.DataFrame, vomp_classifications:
     
     return merged_df_tone, metrics_df
 
+def plot_tones(merged_df_tone: pd.DataFrame, outfile: Path)-> None:
+    """
+    Plot the predicted tone vs VOMP tone over time.
+
+    Parameters
+    ----------
+    merged_df_tone : pd.DataFrame
+        DataFrame with 'voice_tone_pred' and 'tone_vomp' columns, indexed by date.
+    outfile : Path
+        Path to save the output plot.
+    """
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    # Plot both tone series
+    ax.plot(merged_df_tone.index, merged_df_tone['voice_tone_pred'], 
+            marker='o', linestyle='-', label='Predicted Tone', color='blue', alpha=0.7)
+    ax.plot(merged_df_tone.index, merged_df_tone['tone_vomp'], 
+            marker='s', linestyle='--', label='VOMP Tone', color='red', alpha=0.7)
+    
+    # Format x-axis for dates
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+    ax.xaxis.set_major_locator(mdates.YearLocator())
+    ax.xaxis.set_minor_locator(mdates.MonthLocator((1, 4, 7, 10)))
+    plt.xticks(rotation=45, ha='right')
+    
+    # Labels and title
+    ax.set_xlabel('FOMC Meeting Date', fontsize=12)
+    ax.set_ylabel('Voice Tone', fontsize=12)
+    ax.set_title('Predicted Tone vs VOMP Tone Over Time', fontsize=14, fontweight='bold')
+    ax.legend(loc='best')
+    ax.grid(True, alpha=0.3)
+    ax.axhline(y=0, color='black', linestyle='-', linewidth=0.8)
+    
+    plt.tight_layout()
+    plt.savefig(outfile / 'tone_comparison_plot.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
 def save_results(merged_df: pd.DataFrame, metrics_df: pd.DataFrame, outfile: Path) -> None:
     """
     Save the grading DataFrame to a CSV file.
@@ -251,7 +288,6 @@ def save_results(merged_df: pd.DataFrame, metrics_df: pd.DataFrame, outfile: Pat
 
     out_file_metrics = outfile / "tone_comp_metrics.csv"
     metrics_df.to_csv(out_file_metrics, index=True)
-
 
 def eval_tone_metric(pred_file: Path, VOMP_tones_file: Path, VOMP_class_file: Path) -> tuple:
     """
@@ -288,13 +324,16 @@ def eval_tone_metric(pred_file: Path, VOMP_tones_file: Path, VOMP_class_file: Pa
 def main():
     cur_path = Path(__file__).resolve().parent
     data_dir = cur_path.parent.parent / "data"
-    pred_file = data_dir / "predictions_librosa.csv"
+    pred_file = data_dir / "baseline_predictions_fomc.csv" #"predictions_fomc_adam.csv" 
     VOMP_tones_file = data_dir / "VOMP_tones.csv"
     VOMP_class_file = data_dir / "VOMP_classifications.csv"
-    outfile = data_dir
+    outdir = data_dir / "baseline_metrics_output"
+    outdir.mkdir(parents=True, exist_ok=True)
+
     merged_df_tone, metrics_df, tone_metric = eval_tone_metric(pred_file, VOMP_tones_file, VOMP_class_file)
     print(f"Tone Metric: {tone_metric}")
-    save_results(merged_df_tone, metrics_df, outfile)
+    plot_tones(merged_df_tone, outdir)
+    save_results(merged_df_tone, metrics_df, outdir)
 
 if __name__ == "__main__":
     main()
