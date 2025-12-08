@@ -85,12 +85,12 @@ from utils import set_global_seed
 # Hyperparameter grid for advanced model
 ###############
 ADVANCED_PARAM_GRID: Dict[str, Any] = {
-    "clf__model__num_layers":    [2],
-    "clf__model__dense_units":   [512],
+    "clf__model__num_layers":    [2,3,4,5,6],
+    "clf__model__dense_units":   [128, 256, 512],
     "clf__model__dropout":       [0.1, 0.2, 0.3],
-    "clf__model__optimizer":     ["rmsprop"],
-    "clf__model__learning_rate": [1e-3],
-    "clf__batch_size":           [64, 128],
+    "clf__model__optimizer":     ["rmsprop", "adam"],
+    "clf__model__learning_rate": [1e-3, 1e-5],
+    "clf__batch_size":           [32, 64, 128],
     "clf__epochs":               [200],
     "clf__model__use_batchnorm": [True],
     "clf__model__activation":    ["gelu"],
@@ -319,7 +319,7 @@ def run_cross_validation(
     ## Balanced split using shared utility
     emotions = EMOTIONS_ADVANCED
 
-    int2emotions, emotions2int, x_train, y_train, x_test, y_test, _, _ = split_data(
+    int2emotions, emotions2int, x_train, y_train, x_test, y_test, ds_train, ds_test = split_data(
         emotions=emotions,
         filename=training_dataset,
         train_set=0.8,

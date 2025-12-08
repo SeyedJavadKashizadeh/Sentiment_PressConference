@@ -255,7 +255,7 @@ def main() -> None:
         filename=effective_infile,
         train_set=0.8
     )
-    
+
     y_train = np.array([emotions2int[label] for label in y_train.ravel()])
     y_test  = np.array([emotions2int[label] for label in y_test.ravel()])
 
