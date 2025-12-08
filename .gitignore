@@ -212,3 +212,31 @@ __marimo__/
 
 # macOS system files
 .DS_Store
+
+# training datasets
+dataset_training/*
+!dataset_trainings/.gitkeep
+
+# converted_16khz
+converted_16khz/*
+!converted_16khz/.gitkeep
+
+# avoid track merging_features_training
+merged_features_training.csv
+merged.csv
+
+# FOMC datasets
+data_FOMC/*
+!data_FOMC/.gitkeep
+
+# Training datasets
+data_training/*
+!data_training/.gitkeep
+
+# Outputs
+Outputs/*
+!Outputs/.gitkeep
+
+# Garbage
+search.py
+.vscode
