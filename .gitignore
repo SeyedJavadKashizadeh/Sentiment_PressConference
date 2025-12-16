@@ -232,11 +232,15 @@ data_FOMC/*
 # Training datasets
 data_training/*
 !data_training/.gitkeep
+# !data_training/merged_with_features.csv
+# !data_training/merged_with_features_opensmile.csv
+# !data_training/merged_with_features_librosa.csv
 
-# Outputs
-Outputs/*
-!Outputs/.gitkeep
+# Ignore all outputs
+outputs/**
 
 # Garbage
 search.py
 .vscode
+
+docs/*

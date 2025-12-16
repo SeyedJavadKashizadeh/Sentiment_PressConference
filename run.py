@@ -9,7 +9,8 @@ Description
 This script is a thin dispatcher that forwards subcommands to specialized
 helper CLIs living under the `helpers/` folder. It centralizes the way you
 interact with the full pipeline (data preparation, feature extraction,
-model training, prediction, cross-validation, and experiment visualization).
+model training, prediction, cross-validation, experiment visualization,
+and VOMP evaluation).
 
 Structure
 ---------------
@@ -20,6 +21,7 @@ Structure
     - helpers/run_predict_model.py
     - helpers/run_cross_validation.py
     - helpers/run_visualisation.py
+    - helpers/run_vomp_eval.py
 
 - A simple `argparse` interface:
     - `command`: which pipeline step to run
@@ -156,23 +158,37 @@ Available subcommands and examples
            --style         dense_units \
            --target-metric Accuracy
 
+7) vomp-eval
+   Wraps: `helpers/run_vomp_eval.py`
+
+   Purpose:
+       Evaluate one or multiple emotion-prediction CSV files against the
+       VOMP reference datasets, replicate the VOMP-style voice tone metric,
+       and save per-date grading tables, aggregated metrics, and (optionally)
+       comparison plots across models.
+
+   Examples:
+
+       # Single model
+       python run.py vomp-eval \
+           --vomp-dir   data/vomp \
+           --model-csvs outputs/predictions/modelA_predictions.csv \
+           --out-dir    outputs/vomp_eval \
+           --plot
+
+       # Multiple models
+       python run.py vomp-eval \
+           --vomp-dir    data/vomp \
+           --model-csvs  outputs/predictions/modelA.csv outputs/predictions/modelB.csv \
+           --model-names modelA modelB \
+           --out-dir     outputs/vomp_eval \
+           --plot
+
 How to use
 ----------
 General pattern:
 
     python run.py <subcommand> [options for that subcommand...]
-
-For example, to train a baseline model and then predict FOMC emotions:
-
-    python run.py train-model \
-        --infile     data_training/merged_with_features.csv \
-        --model-path outputs/models/baseline.h5 \
-        --mode       baseline
-
-    python run.py predict-model \
-        --weights outputs/models/baseline.h5 \
-        --infile  data_fomc/features_merged.parquet \
-        --outfile outputs/predictions/baseline_fomc_predictions.csv
 """
 
 ###############
@@ -182,7 +198,9 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
+
 from utils import set_global_seed
+
 ###############
 # Paths and subcommand mapping
 ###############
@@ -200,6 +218,7 @@ SUBCOMMANDS = {
     "cross-validation": f"{HELPERS}/run_cross_validation.py",
     "visualize-experiments": f"{HELPERS}/run_visualisation.py",
     "eda-analysis": f"{HELPERS}/run_eda_analysis.py",
+    "vomp-eval": f"{HELPERS}/run_vomp_eval.py",
 }
 
 ###############
@@ -222,17 +241,14 @@ def _parse_args() -> argparse.Namespace:
         description=(
             "Top-level pipeline entry point. Dispatches to helper scripts under "
             "the 'helpers/' directory (feature extraction, training, prediction, "
-            "cross-validation, and visualisation)."
+            "cross-validation, visualisation, and VOMP evaluation)."
         )
     )
 
     parser.add_argument(
         "command",
         choices=sorted(SUBCOMMANDS.keys()),
-        help=(
-            "Pipeline step to run. Available: "
-            + ", ".join(sorted(SUBCOMMANDS.keys()))
-        ),
+        help=("Pipeline step to run. Available: " + ", ".join(sorted(SUBCOMMANDS.keys()))),
     )
 
     # All remaining args are passed verbatim to the underlying script
@@ -252,24 +268,18 @@ def main() -> None:
     set_global_seed()
 
     args = _parse_args()
-
     script_name = SUBCOMMANDS[args.command]
 
     ### Resolve script path
     ## From relative name to absolute path
-    # Specification: ensure we locate the helper script relative to this file.
     script_path = ROOT / script_name
 
     if not script_path.exists():
-        raise FileNotFoundError(
-            f"Script for command '{args.command}' not found at: {script_path}"
-        )
+        raise FileNotFoundError(f"Script for command '{args.command}' not found at: {script_path}")
 
     ### Build and run subprocess command
     ## Use same Python interpreter
-    # Specification: run `python <helper> <args...>` with error propagation.
     cmd = [sys.executable, str(script_path)] + args.args
-
     subprocess.run(cmd, check=True)
 
 

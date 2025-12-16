@@ -54,6 +54,14 @@ FOMC_FEATURE_OPENSMILE="$FOMC_FEATURE_DIR/features_opensmile.parquet"
 FOMC_FEATURE_MERGED="$FOMC_FEATURE_DIR/features_merged.parquet"
 
 ###############################################################################
+# Paths – VOMP paper data
+###############################################################################
+
+VOMP_DIR="$ROOT_DIR/vomp_data"
+VOMP_EVAL_OUT_DIR="$ROOT_DIR/outputs/vomp_eval"
+VOMP_PLOTS_DIR="$VOMP_EVAL_OUT_DIR/plots"
+
+###############################################################################
 # Paths – models, experiments, outputs
 ###############################################################################
 
@@ -79,23 +87,28 @@ OPENSMILE_FEATURE_RELATIONSHIPS_DIR="$EDA_DIR/opensmile_feature_relationships"
 TSNE_DIR="$EDA_DIR/tsne"
 
 #### Baseline model
-# BOTH_BASELINE_MODEL_DIR="$BASELINE_MODEL_DIR/both"
 LIBROSA_BASELINE_MODEL_DIR="$BASELINE_MODEL_DIR/librosa"
 KERAS_BASELINE_MODEL="$BASELINE_MODEL_DIR/librosa_only_model.keras"
 CSV_METRICS_BASELINE_MODEL="$BASELINE_MODEL_DIR/librosa_only_metrics.csv"
-# OPENSMILE_BASELINE_MODEL_DIR="$BASELINE_MODEL_DIR/opensmile"
 
-#### Final model
+#### Final model - all datasets
 ALL_DATASETS_FINAL_MODEL_DIR="$FINAL_MODEL_DIR/all_datasets"
-KERAS_ADVANCED_MODEL="$ALL_DATASETS_FINAL_MODEL_DIR/final_model.keras"
-CSV_METRICS_ADVANCED_MODEL="$ALL_DATASETS_FINAL_MODEL_DIR/final_model_metrics.csv"
-# RAVDESS_TESS_DATASETS_FINAL_MODEL_DIR="$FINAL_MODEL_DIR/ravdess_tess"
+ALL_DATASETS_KERAS_ADVANCED_MODEL="$ALL_DATASETS_FINAL_MODEL_DIR/final_model.keras"
+ALL_DATASETS_CSV_METRICS_ADVANCED_MODEL="$ALL_DATASETS_FINAL_MODEL_DIR/final_model_metrics.csv"
+
+#### Final model - RAVDESS TESS (same architecture as all-datasets advanced)
+RAVDESS_TESS_DATASETS_FINAL_MODEL_DIR="$FINAL_MODEL_DIR/ravdess_tess"
+RAVDESS_TESS_KERAS_ADVANCED_MODEL="$RAVDESS_TESS_DATASETS_FINAL_MODEL_DIR/final_model.keras"
+RAVDESS_TESS_CSV_METRICS_ADVANCED_MODEL="$RAVDESS_TESS_DATASETS_FINAL_MODEL_DIR/final_model_metrics.csv"
 
 #### Prediction files
 LIBROSA_FOMC_PRED="$LIBROSA_BASELINE_MODEL_DIR/predictions_fomc.csv"
-ADV_FOMC_PRED="$ALL_DATASETS_FINAL_MODEL_DIR/predictions_fomc.csv"
+ALL_DATASETS_ADV_FOMC_PRED="$ALL_DATASETS_FINAL_MODEL_DIR/predictions_fomc.csv"
+RAVDESS_TESS_ADV_FOMC_PRED="$RAVDESS_TESS_DATASETS_FINAL_MODEL_DIR/predictions_fomc.csv"
+
 LIBROSA_TRAIN_PRED="$LIBROSA_BASELINE_MODEL_DIR/predictions_training.csv"
-ADV_TRAIN_PRED="$ALL_DATASETS_FINAL_MODEL_DIR/predictions_training.csv"
+ALL_DATASETS_ADV_TRAIN_PRED="$ALL_DATASETS_FINAL_MODEL_DIR/predictions_training.csv"
+RAVDESS_TESS_ADV_TRAIN_PRED="$RAVDESS_TESS_DATASETS_FINAL_MODEL_DIR/predictions_training.csv"
 
 ###############################################################################
 # Creating folders
@@ -124,10 +137,14 @@ mkdir -p \
   "$TSNE_DIR" \
   \
   "$LIBROSA_BASELINE_MODEL_DIR" \
-  "$ALL_DATASETS_FINAL_MODEL_DIR"
+  "$ALL_DATASETS_FINAL_MODEL_DIR" \
+  "$RAVDESS_TESS_DATASETS_FINAL_MODEL_DIR" \
+  \
+  "$VOMP_EVAL_OUT_DIR" \
+  "$VOMP_PLOTS_DIR"
 
 ###############################################################################
-# Hyperparameters for final ADVANCED model
+# Hyperparameters for final ADVANCED model (used for BOTH advanced trainings)
 ###############################################################################
 ADV_NUM_LAYERS=2
 ADV_DENSE_UNITS=512
@@ -137,7 +154,7 @@ ADV_LR=0.001
 ADV_BATCH_SIZE=128
 ADV_EPOCHS=300
 ADV_ACTIVATION="gelu"
-ADV_RIDGE_PENALTY=0.0 
+ADV_RIDGE_PENALTY=0.0
 ADV_LASSO_PENALTY=1e-8
 
 ###############################################################################
@@ -151,7 +168,7 @@ BAS_LR=0.001
 BAS_BATCH_SIZE=64
 BAS_EPOCHS=1000
 BAS_ACTIVATION="linear"
-BAS_RIDGE_PENALTY=0.0 
+BAS_RIDGE_PENALTY=0.0
 BAS_LASSO_PENALTY=0.0
 
 ###############################################################################
@@ -159,7 +176,7 @@ BAS_LASSO_PENALTY=0.0
 ###############################################################################
 echo
 echo "================================================================"
-echo "[1/8] Training data: download + assemble + features (librosa+opensmile)"
+echo "[1/9] Training data: download + assemble + features (librosa+opensmile)"
 echo "================================================================"
 
 $PYTHON helpers/run_extract_training_features.py \
@@ -180,7 +197,7 @@ echo "   Both      : $TRAIN_FEATURE_BOTH"
 ###############################################################################
 echo
 echo "================================================================"
-echo "[2/8] FOMC data: download + convert + features (librosa+opensmile)"
+echo "[2/9] FOMC data: download + convert + features (librosa+opensmile)"
 echo "================================================================"
 
 $PYTHON helpers/run_extract_fomc_features.py \
@@ -199,7 +216,7 @@ echo "   Combined  : $FOMC_FEATURE_MERGED"
 ###############################################################################
 echo
 echo "================================================================"
-echo "[3/8] EDA on training features"
+echo "[3/9] EDA on training features"
 echo "================================================================"
 
 $PYTHON helpers/run_eda_analysis.py \
@@ -214,7 +231,7 @@ echo "[INFO] EDA outputs stored in: $EDA_DIR"
 ###############################################################################
 echo
 echo "================================================================"
-echo "[4/8] Cross-validation + hyperparameter search (ADVANCED)"
+echo "[4/9] Cross-validation + hyperparameter search (ADVANCED)"
 echo "================================================================"
 
 mkdir -p "$EXPERIMENTS_DIR"
@@ -227,16 +244,16 @@ $PYTHON helpers/run_cross_validation.py \
 echo "[INFO] CV results written to: $CSV_RESULTS_OF_CV_PLUS_GS"
 
 ###############################################################################
-# 5) Training models: Baseline(librosa), ADVANCED(full datasets)
+# 5) Training models: Baseline(librosa), ADVANCED(all datasets), ADVANCED(ravdess+tess)
 ###############################################################################
 echo
 echo "================================================================"
-echo "[5/8] Training models"
+echo "[5/9] Training models"
 echo "================================================================"
 
 echo
 echo "================================================================"
-echo "[5.1/8] Training BASELINE model"
+echo "[5.1/9] Training BASELINE model"
 echo "================================================================"
 
 $PYTHON helpers/run_training_model.py \
@@ -259,14 +276,14 @@ echo "[INFO] Metrics CSV            : $CSV_METRICS_BASELINE_MODEL"
 
 echo
 echo "================================================================"
-echo "[5.2/8] Training ADVANCED model"
+echo "[5.2/9] Training ADVANCED model (ALL datasets)"
 echo "================================================================"
 
 $PYTHON helpers/run_training_model.py \
   --mode advanced \
   --infile "$TRAIN_FEATURE_BOTH" \
-  --model-path "$KERAS_ADVANCED_MODEL" \
-  --metrics-csv "$CSV_METRICS_ADVANCED_MODEL" \
+  --model-path "$ALL_DATASETS_KERAS_ADVANCED_MODEL" \
+  --metrics-csv "$ALL_DATASETS_CSV_METRICS_ADVANCED_MODEL" \
   --num-layers "$ADV_NUM_LAYERS" \
   --dense-units "$ADV_DENSE_UNITS" \
   --dropout "$ADV_DROPOUT" \
@@ -280,20 +297,47 @@ $PYTHON helpers/run_training_model.py \
   --use-batchnorm \
   --standardize-inputs
 
-echo "[INFO] Trained ADVANCED model: $KERAS_ADVANCED_MODEL"
-echo "[INFO] Metrics CSV            : $CSV_METRICS_ADVANCED_MODEL"
+echo "[INFO] Trained ADVANCED model (ALL) : $ALL_DATASETS_KERAS_ADVANCED_MODEL"
+echo "[INFO] Metrics CSV (ALL)            : $ALL_DATASETS_CSV_METRICS_ADVANCED_MODEL"
+
+echo
+echo "================================================================"
+echo "[5.3/9] Training ADVANCED model (RAVDESS + TESS subsample)"
+echo "================================================================"
+
+$PYTHON helpers/run_training_model.py \
+  --mode advanced \
+  --infile "$TRAIN_FEATURE_BOTH" \
+  --model-path "$RAVDESS_TESS_KERAS_ADVANCED_MODEL" \
+  --metrics-csv "$RAVDESS_TESS_CSV_METRICS_ADVANCED_MODEL" \
+  --num-layers "$ADV_NUM_LAYERS" \
+  --dense-units "$ADV_DENSE_UNITS" \
+  --dropout "$ADV_DROPOUT" \
+  --optimizer "$ADV_OPTIMIZER" \
+  --learning-rate "$ADV_LR" \
+  --activation "$ADV_ACTIVATION" \
+  --batch-size "$ADV_BATCH_SIZE" \
+  --epochs "$ADV_EPOCHS" \
+  --ridge-penalty "$ADV_RIDGE_PENALTY" \
+  --lasso-penalty "$ADV_LASSO_PENALTY" \
+  --use-batchnorm \
+  --standardize-inputs \
+  --datasets ravdess tess
+
+echo "[INFO] Trained ADVANCED model (R+T): $RAVDESS_TESS_KERAS_ADVANCED_MODEL"
+echo "[INFO] Metrics CSV (R+T)           : $RAVDESS_TESS_CSV_METRICS_ADVANCED_MODEL"
 
 ###############################################################################
 # 6) Prediction on FOMC Dataset
 ###############################################################################
 echo
 echo "================================================================"
-echo "[6/8] Predicting FOMC emotions"
+echo "[6/9] Predicting FOMC emotions"
 echo "================================================================"
 
 echo
 echo "================================================================"
-echo "[6.1/8] Predict emotions on FOMC features BASELINE model"
+echo "[6.1/9] Predict emotions on FOMC features BASELINE model"
 echo "================================================================"
 
 $PYTHON helpers/run_predict_model.py \
@@ -306,28 +350,41 @@ echo "[INFO] FOMC predictions stored in: $LIBROSA_FOMC_PRED"
 
 echo
 echo "================================================================"
-echo "[6.2/8] Predict emotions on FOMC features ADVANCED model"
+echo "[6.2/9] Predict emotions on FOMC features ADVANCED model (ALL datasets)"
 echo "================================================================"
 
 $PYTHON helpers/run_predict_model.py \
   --mode advanced \
-  --weights "$KERAS_ADVANCED_MODEL" \
+  --weights "$ALL_DATASETS_KERAS_ADVANCED_MODEL" \
   --infile "$FOMC_FEATURE_MERGED" \
-  --outfile "$ADV_FOMC_PRED"
+  --outfile "$ALL_DATASETS_ADV_FOMC_PRED"
 
-echo "[INFO] FOMC predictions stored in: $ADV_FOMC_PRED"
+echo "[INFO] FOMC predictions stored in: $ALL_DATASETS_ADV_FOMC_PRED"
+
+echo
+echo "================================================================"
+echo "[6.3/9] Predict emotions on FOMC features ADVANCED model (RAVDESS + TESS)"
+echo "================================================================"
+
+$PYTHON helpers/run_predict_model.py \
+  --mode advanced \
+  --weights "$RAVDESS_TESS_KERAS_ADVANCED_MODEL" \
+  --infile "$FOMC_FEATURE_MERGED" \
+  --outfile "$RAVDESS_TESS_ADV_FOMC_PRED"
+
+echo "[INFO] FOMC predictions stored in: $RAVDESS_TESS_ADV_FOMC_PRED"
 
 ###############################################################################
 # 7) Prediction on Training Dataset
 ###############################################################################
 echo
 echo "================================================================"
-echo "[7/8] Predicting TRAINING emotions"
+echo "[7/9] Predicting TRAINING emotions"
 echo "================================================================"
 
 echo
 echo "================================================================"
-echo "[7.1/8] Predict emotions on TRAINING features BASELINE model"
+echo "[7.1/9] Predict emotions on TRAINING features BASELINE model"
 echo "================================================================"
 
 $PYTHON helpers/run_predict_model.py \
@@ -340,38 +397,72 @@ echo "[INFO] Training predictions stored in: $LIBROSA_TRAIN_PRED"
 
 echo
 echo "================================================================"
-echo "[7.2/8] Predict emotions on TRAINING features ADVANCED model"
+echo "[7.2/9] Predict emotions on TRAINING features ADVANCED model (ALL datasets)"
 echo "================================================================"
 
 $PYTHON helpers/run_predict_model.py \
   --mode advanced \
-  --weights "$KERAS_ADVANCED_MODEL" \
+  --weights "$ALL_DATASETS_KERAS_ADVANCED_MODEL" \
   --infile "$TRAIN_FEATURE_BASE" \
-  --outfile "$ADV_TRAIN_PRED"
+  --outfile "$ALL_DATASETS_ADV_TRAIN_PRED"
 
-echo "[INFO] Training predictions stored in: $ADV_TRAIN_PRED"
+echo "[INFO] Training predictions stored in: $ALL_DATASETS_ADV_TRAIN_PRED"
+
+echo
+echo "================================================================"
+echo "[7.3/9] Predict emotions on TRAINING features ADVANCED model (RAVDESS + TESS)"
+echo "================================================================"
+
+$PYTHON helpers/run_predict_model.py \
+  --mode advanced \
+  --weights "$RAVDESS_TESS_KERAS_ADVANCED_MODEL" \
+  --infile "$TRAIN_FEATURE_BASE" \
+  --outfile "$RAVDESS_TESS_ADV_TRAIN_PRED"
+
+echo "[INFO] Training predictions stored in: $RAVDESS_TESS_ADV_TRAIN_PRED"
 
 ###############################################################################
-# 8) Summary
+# 8) VOMP evaluation plots (baseline vs advanced_ravdess_tess)
 ###############################################################################
 echo
 echo "================================================================"
-echo "[8/8] Pipeline completed"
+echo "[8/9] VOMP evaluation + plots (baseline vs advanced_ravdess_tess)"
 echo "================================================================"
-echo "Training features                 : $TRAIN_FEATURE_BOTH"
-echo "FOMC features                     : $FOMC_FEATURE_MERGED"
-echo "Final model weights               : $KERAS_ADVANCED_MODEL"
-echo "Baseline model weights            : $KERAS_BASELINE_MODEL"
-echo "Final model metrics               : $CSV_METRICS_ADVANCED_MODEL"
-echo "Baseline model metrics            : $CSV_METRICS_BASELINE_MODEL"
-echo "Final model FOMC predictions      : $ADV_FOMC_PRED"
-echo "Baseline model FOMC predictions   : $LIBROSA_FOMC_PRED"
-echo "Final model TRAINING predictions  : $ADV_TRAIN_PRED"
-echo "Baseline TRAINING predictions     : $LIBROSA_TRAIN_PRED"
+
+$PYTHON helpers/run_vomp_eval.py \
+  --vomp-dir "$VOMP_DIR" \
+  --model-csvs "$LIBROSA_FOMC_PRED" "$RAVDESS_TESS_ADV_FOMC_PRED" \
+  --model-names baseline advanced_ravdess_tess \
+  --out-dir "$VOMP_EVAL_OUT_DIR" \
+  --plot
+
+echo "[INFO] VOMP evaluation outputs stored in: $VOMP_EVAL_OUT_DIR"
+echo "[INFO] VOMP plots stored in            : $VOMP_PLOTS_DIR"
+
+###############################################################################
+# 9) Summary
+###############################################################################
+echo
+echo "================================================================"
+echo "[9/9] Pipeline completed"
+echo "================================================================"
+echo "Training features                       : $TRAIN_FEATURE_BOTH"
+echo "FOMC features                           : $FOMC_FEATURE_MERGED"
+echo "Baseline model weights                  : $KERAS_BASELINE_MODEL"
+echo "Advanced model weights (ALL)            : $ALL_DATASETS_KERAS_ADVANCED_MODEL"
+echo "Advanced model weights (RAVDESS+TESS)   : $RAVDESS_TESS_KERAS_ADVANCED_MODEL"
+echo "Baseline model metrics                  : $CSV_METRICS_BASELINE_MODEL"
+echo "Advanced model metrics (ALL)            : $ALL_DATASETS_CSV_METRICS_ADVANCED_MODEL"
+echo "Advanced model metrics (RAVDESS+TESS)   : $RAVDESS_TESS_CSV_METRICS_ADVANCED_MODEL"
+echo "Baseline model FOMC predictions         : $LIBROSA_FOMC_PRED"
+echo "Advanced model FOMC predictions (ALL)   : $ALL_DATASETS_ADV_FOMC_PRED"
+echo "Advanced model FOMC predictions (R+T)   : $RAVDESS_TESS_ADV_FOMC_PRED"
+echo "VOMP eval output dir                    : $VOMP_EVAL_OUT_DIR"
+echo "VOMP plots dir                          : $VOMP_PLOTS_DIR"
 echo "================================================================"
 
 echo "================================================================"
-echo "FINAL MODEL ARCHITECTURE"
+echo "ADVANCED MODEL ARCHITECTURE (used for ALL and RAVDESS+TESS)"
 echo "================================================================"
 echo "Number of layers       : $ADV_NUM_LAYERS"
 echo "Number of dense units  : $ADV_DENSE_UNITS"

@@ -5,7 +5,7 @@ run_extract_training_features.py
 Description
 -------------------------
 End-to-end orchestration script to prepare the **training data** for
-speech–emotion modelling. It performs THREE stages in a single call:
+speech-emotion modelling. It performs THREE stages in a single call:
 
     1) Ensure raw emotional speech datasets are available locally
        (download them if necessary, via a helper module).
@@ -60,7 +60,7 @@ From the manifest CSV, the script:
                      (40 MFCC + 12 chroma + 128 mel + 7 contrast + 6 tonnetz)
        - opensmile : eGeMAPSv02 Functionals
        - both      : horizontally concatenate both sets
-                     (OpenSMILE columns will be prefixed 'smile_').
+                     (OpenSMILE columns will be prefixed '``smile_*``').
 3. Concatenates features to the original manifest DataFrame and writes
    `--out-file`.
 
@@ -190,8 +190,8 @@ def extract_and_merge_from_csv(
 
            engine = "both":
                <stem>_librosa.csv      = base + Librosa
-               <stem>_opensmile.csv    = base + smile_* (OpenSMILE prefixed)
-               <out_csv>               = base + Librosa + smile_*
+               <stem>_opensmile.csv    = base + ``smile_*`` (OpenSMILE prefixed)
+               <out_csv>               = base + Librosa + ``smile_*``
 
     Parameters
     ----------
